@@ -46,7 +46,26 @@ export default function EmployerTasksPage() {
         const data = await res.json();
 
         if (data.success) {
-          setTasks(data.data);
+          // Fetch categories to join with tasks
+          const categoriesRes = await fetch("/api/categories", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const categoriesData = await categoriesRes.json();
+          
+          const categoriesMap = new Map();
+          if (categoriesData.success && Array.isArray(categoriesData.data)) {
+            categoriesData.data.forEach((cat: any) => {
+              categoriesMap.set(cat.id, cat.name);
+            });
+          }
+
+          // Map category names to tasks
+          const tasksWithCategories = data.data.map((task: any) => ({
+            ...task,
+            category: categoriesMap.get(task.categoryId) || "Uncategorized",
+          }));
+
+          setTasks(tasksWithCategories);
         }
       } catch (error) {
         console.error("Error fetching tasks:", error);

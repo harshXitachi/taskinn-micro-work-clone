@@ -117,11 +117,11 @@ export async function GET(request: NextRequest) {
     // Apply pagination
     const results = await query.limit(limit).offset(offset);
 
-    return NextResponse.json(results, { status: 200 });
+    return NextResponse.json({ success: true, data: results }, { status: 200 });
   } catch (error) {
     console.error('GET error:', error);
     return NextResponse.json(
-      { error: 'Internal server error: ' + (error as Error).message },
+      { success: false, error: 'Internal server error: ' + (error as Error).message },
       { status: 500 }
     );
   }
@@ -145,35 +145,35 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!title) {
       return NextResponse.json(
-        { error: 'Title is required', code: 'MISSING_TITLE' },
+        { success: false, error: 'Title is required', code: 'MISSING_TITLE' },
         { status: 400 }
       );
     }
 
     if (!description) {
       return NextResponse.json(
-        { error: 'Description is required', code: 'MISSING_DESCRIPTION' },
+        { success: false, error: 'Description is required', code: 'MISSING_DESCRIPTION' },
         { status: 400 }
       );
     }
 
     if (!employerId) {
       return NextResponse.json(
-        { error: 'Employer ID is required', code: 'MISSING_EMPLOYER_ID' },
+        { success: false, error: 'Employer ID is required', code: 'MISSING_EMPLOYER_ID' },
         { status: 400 }
       );
     }
 
     if (price === undefined || price === null) {
       return NextResponse.json(
-        { error: 'Price is required', code: 'MISSING_PRICE' },
+        { success: false, error: 'Price is required', code: 'MISSING_PRICE' },
         { status: 400 }
       );
     }
 
     if (!categoryId) {
       return NextResponse.json(
-        { error: 'Category ID is required', code: 'MISSING_CATEGORY_ID' },
+        { success: false, error: 'Category ID is required', code: 'MISSING_CATEGORY_ID' },
         { status: 400 }
       );
     }
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum <= 0) {
       return NextResponse.json(
-        { error: 'Price must be a positive number', code: 'INVALID_PRICE' },
+        { success: false, error: 'Price must be a positive number', code: 'INVALID_PRICE' },
         { status: 400 }
       );
     }
@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
     const categoryIdNum = parseInt(categoryId);
     if (isNaN(categoryIdNum)) {
       return NextResponse.json(
-        { error: 'Category ID must be a valid integer', code: 'INVALID_CATEGORY_ID' },
+        { success: false, error: 'Category ID must be a valid integer', code: 'INVALID_CATEGORY_ID' },
         { status: 400 }
       );
     }
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
       slotsNum = parseInt(slots);
       if (isNaN(slotsNum) || slotsNum <= 0) {
         return NextResponse.json(
-          { error: 'Slots must be a positive integer', code: 'INVALID_SLOTS' },
+          { success: false, error: 'Slots must be a positive integer', code: 'INVALID_SLOTS' },
           { status: 400 }
         );
       }
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
       const timeEstimateNum = parseInt(timeEstimate);
       if (isNaN(timeEstimateNum)) {
         return NextResponse.json(
-          { error: 'Time estimate must be a valid integer', code: 'INVALID_TIME_ESTIMATE' },
+          { success: false, error: 'Time estimate must be a valid integer', code: 'INVALID_TIME_ESTIMATE' },
           { status: 400 }
         );
       }
@@ -246,11 +246,11 @@ export async function POST(request: NextRequest) {
 
     const newTask = await db.insert(tasks).values(insertData).returning();
 
-    return NextResponse.json(newTask[0], { status: 201 });
+    return NextResponse.json({ success: true, data: newTask[0] }, { status: 201 });
   } catch (error) {
     console.error('POST error:', error);
     return NextResponse.json(
-      { error: 'Internal server error: ' + (error as Error).message },
+      { success: false, error: 'Internal server error: ' + (error as Error).message },
       { status: 500 }
     );
   }
@@ -263,7 +263,7 @@ export async function PUT(request: NextRequest) {
 
     if (!id || isNaN(parseInt(id))) {
       return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
+        { success: false, error: 'Valid ID is required', code: 'INVALID_ID' },
         { status: 400 }
       );
     }
@@ -279,7 +279,7 @@ export async function PUT(request: NextRequest) {
 
     if (existingTask.length === 0) {
       return NextResponse.json(
-        { error: 'Task not found', code: 'TASK_NOT_FOUND' },
+        { success: false, error: 'Task not found', code: 'TASK_NOT_FOUND' },
         { status: 404 }
       );
     }
@@ -314,7 +314,7 @@ export async function PUT(request: NextRequest) {
       const categoryIdNum = parseInt(categoryId);
       if (isNaN(categoryIdNum)) {
         return NextResponse.json(
-          { error: 'Category ID must be a valid integer', code: 'INVALID_CATEGORY_ID' },
+          { success: false, error: 'Category ID must be a valid integer', code: 'INVALID_CATEGORY_ID' },
           { status: 400 }
         );
       }
@@ -329,7 +329,7 @@ export async function PUT(request: NextRequest) {
       const priceNum = parseFloat(price);
       if (isNaN(priceNum) || priceNum <= 0) {
         return NextResponse.json(
-          { error: 'Price must be a positive number', code: 'INVALID_PRICE' },
+          { success: false, error: 'Price must be a positive number', code: 'INVALID_PRICE' },
           { status: 400 }
         );
       }
@@ -343,7 +343,7 @@ export async function PUT(request: NextRequest) {
         const timeEstimateNum = parseInt(timeEstimate);
         if (isNaN(timeEstimateNum)) {
           return NextResponse.json(
-            { error: 'Time estimate must be a valid integer', code: 'INVALID_TIME_ESTIMATE' },
+            { success: false, error: 'Time estimate must be a valid integer', code: 'INVALID_TIME_ESTIMATE' },
             { status: 400 }
           );
         }
@@ -355,7 +355,7 @@ export async function PUT(request: NextRequest) {
       const slotsNum = parseInt(slots);
       if (isNaN(slotsNum) || slotsNum <= 0) {
         return NextResponse.json(
-          { error: 'Slots must be a positive integer', code: 'INVALID_SLOTS' },
+          { success: false, error: 'Slots must be a positive integer', code: 'INVALID_SLOTS' },
           { status: 400 }
         );
       }
@@ -380,11 +380,11 @@ export async function PUT(request: NextRequest) {
       .where(eq(tasks.id, taskId))
       .returning();
 
-    return NextResponse.json(updatedTask[0], { status: 200 });
+    return NextResponse.json({ success: true, data: updatedTask[0] }, { status: 200 });
   } catch (error) {
     console.error('PUT error:', error);
     return NextResponse.json(
-      { error: 'Internal server error: ' + (error as Error).message },
+      { success: false, error: 'Internal server error: ' + (error as Error).message },
       { status: 500 }
     );
   }
@@ -397,7 +397,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!id || isNaN(parseInt(id))) {
       return NextResponse.json(
-        { error: 'Valid ID is required', code: 'INVALID_ID' },
+        { success: false, error: 'Valid ID is required', code: 'INVALID_ID' },
         { status: 400 }
       );
     }
@@ -413,7 +413,7 @@ export async function DELETE(request: NextRequest) {
 
     if (existingTask.length === 0) {
       return NextResponse.json(
-        { error: 'Task not found', code: 'TASK_NOT_FOUND' },
+        { success: false, error: 'Task not found', code: 'TASK_NOT_FOUND' },
         { status: 404 }
       );
     }
@@ -425,15 +425,16 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(
       {
+        success: true,
         message: 'Task deleted successfully',
-        task: deletedTask[0],
+        data: deletedTask[0],
       },
       { status: 200 }
     );
   } catch (error) {
     console.error('DELETE error:', error);
     return NextResponse.json(
-      { error: 'Internal server error: ' + (error as Error).message },
+      { success: false, error: 'Internal server error: ' + (error as Error).message },
       { status: 500 }
     );
   }

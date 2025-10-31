@@ -48,23 +48,39 @@ export default function TasksPage() {
       try {
         const token = localStorage.getItem("bearer_token");
 
-        // Fetch tasks
-        const tasksRes = await fetch("/api/tasks?status=open", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const tasksData = await tasksRes.json();
+        // Fetch tasks and categories in parallel
+        const [tasksRes, categoriesRes] = await Promise.all([
+          fetch("/api/tasks?status=open", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch("/api/categories", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-        // Fetch categories
-        const categoriesRes = await fetch("/api/categories", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const tasksData = await tasksRes.json();
         const categoriesData = await categoriesRes.json();
 
-        if (tasksData.success) {
-          setTasks(tasksData.data);
-        }
         if (categoriesData.success) {
           setCategories(categoriesData.data);
+        }
+
+        if (tasksData.success) {
+          // Create a map of category IDs to names
+          const categoriesMap = new Map();
+          if (categoriesData.success && Array.isArray(categoriesData.data)) {
+            categoriesData.data.forEach((cat: any) => {
+              categoriesMap.set(cat.id, cat.name);
+            });
+          }
+
+          // Map category names to tasks
+          const tasksWithCategories = tasksData.data.map((task: any) => ({
+            ...task,
+            category: categoriesMap.get(task.categoryId) || "Uncategorized",
+          }));
+
+          setTasks(tasksWithCategories);
         }
       } catch (error) {
         console.error("Error fetching tasks:", error);

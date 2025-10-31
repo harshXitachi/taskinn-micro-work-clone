@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { taskSubmissions } from '@/db/schema';
+import { taskSubmissions, tasks } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -18,6 +12,7 @@ export async function GET(request: NextRequest) {
     if (id) {
       if (!id || isNaN(parseInt(id))) {
         return NextResponse.json({ 
+          success: false,
           error: "Valid ID is required",
           code: "INVALID_ID" 
         }, { status: 400 });
@@ -30,22 +25,22 @@ export async function GET(request: NextRequest) {
 
       if (submission.length === 0) {
         return NextResponse.json({ 
+          success: false,
           error: 'Submission not found',
           code: "SUBMISSION_NOT_FOUND" 
         }, { status: 404 });
       }
 
-      return NextResponse.json(submission[0], { status: 200 });
+      return NextResponse.json({ success: true, data: submission[0] }, { status: 200 });
     }
 
     // List submissions with filtering
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 100);
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100);
     const offset = parseInt(searchParams.get('offset') ?? '0');
     const status = searchParams.get('status');
     const workerId = searchParams.get('workerId');
     const taskId = searchParams.get('taskId');
-
-    let query = db.select().from(taskSubmissions);
+    const employerId = searchParams.get('employerId');
 
     // Build filter conditions
     const conditions = [];
@@ -61,6 +56,7 @@ export async function GET(request: NextRequest) {
     if (taskId) {
       if (isNaN(parseInt(taskId))) {
         return NextResponse.json({ 
+          success: false,
           error: "Valid task ID is required",
           code: "INVALID_TASK_ID" 
         }, { status: 400 });
@@ -68,9 +64,34 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(taskSubmissions.taskId, parseInt(taskId)));
     }
 
+    // Build base query
+    let query = db
+      .select({
+        id: taskSubmissions.id,
+        taskId: taskSubmissions.taskId,
+        workerId: taskSubmissions.workerId,
+        status: taskSubmissions.status,
+        submissionData: taskSubmissions.submissionData,
+        submittedAt: taskSubmissions.submittedAt,
+        reviewedAt: taskSubmissions.reviewedAt,
+        reviewerNotes: taskSubmissions.reviewerNotes,
+        // Join task details
+        taskTitle: tasks.title,
+        taskDescription: tasks.description,
+        taskPrice: tasks.price,
+        taskEmployerId: tasks.employerId,
+      })
+      .from(taskSubmissions)
+      .leftJoin(tasks, eq(taskSubmissions.taskId, tasks.id));
+
     // Apply filters if any
     if (conditions.length > 0) {
       query = query.where(and(...conditions));
+    }
+
+    // Filter by employer if provided
+    if (employerId) {
+      query = query.where(eq(tasks.employerId, employerId));
     }
 
     // Sort by submittedAt DESC (newest first) and apply pagination
@@ -79,11 +100,30 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .offset(offset);
 
-    return NextResponse.json(results, { status: 200 });
+    // Format results
+    const formattedResults = results.map((row) => ({
+      id: row.id,
+      taskId: row.taskId,
+      taskTitle: row.taskTitle || 'Unknown Task',
+      taskDescription: row.taskDescription || '',
+      reward: row.taskPrice || 0,
+      workerId: row.workerId,
+      status: row.status,
+      submissionText: row.submissionData || '',
+      submissionData: row.submissionData,
+      attachmentUrl: null, // Parse from submissionData if needed
+      submittedAt: row.submittedAt,
+      reviewedAt: row.reviewedAt,
+      feedback: row.reviewerNotes,
+      employerId: row.taskEmployerId,
+    }));
+
+    return NextResponse.json({ success: true, data: formattedResults }, { status: 200 });
 
   } catch (error) {
     console.error('GET error:', error);
     return NextResponse.json({ 
+      success: false,
       error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
     }, { status: 500 });
   }
