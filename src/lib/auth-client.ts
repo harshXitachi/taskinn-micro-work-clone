@@ -35,19 +35,36 @@ export function useSession(): SessionData {
 
    const fetchSession = async () => {
       try {
+         const token = typeof window !== 'undefined' ? localStorage.getItem("bearer_token") : "";
+         
+         if (!token) {
+            console.log("No bearer token found");
+            setSession(null);
+            setError(new Error("No authentication token"));
+            setIsPending(false);
+            return;
+         }
+
          const res = await authClient.getSession({
             fetchOptions: {
                auth: {
                   type: "Bearer",
-                  token: typeof window !== 'undefined' ? localStorage.getItem("bearer_token") || "" : "",
+                  token: token,
                },
             },
          });
+         
+         console.log("Session fetched:", res.data);
          setSession(res.data);
          setError(null);
       } catch (err) {
+         console.error("Session fetch error:", err);
          setSession(null);
          setError(err);
+         // Clear invalid token
+         if (typeof window !== 'undefined') {
+            localStorage.removeItem("bearer_token");
+         }
       } finally {
          setIsPending(false);
       }
