@@ -93,8 +93,8 @@ export async function createPayPalOrder(amount: number, currency: string = 'USD'
       brand_name: 'TaskInn',
       landing_page: 'NO_PREFERENCE',
       user_action: 'PAY_NOW',
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/employer/payments?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/employer/payments?cancelled=true`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/employer/payments?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/employer/payments?cancelled=true`,
     },
   });
 

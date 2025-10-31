@@ -7,11 +7,11 @@ import {
   Users, 
   DollarSign, 
   Clock,
-  CheckCircle,
-  XCircle,
-  Plus
+  Plus,
+  Wallet as WalletIcon
 } from "lucide-react";
 import Link from "next/link";
+import WalletCard from "@/components/dashboard/WalletCard";
 
 interface EmployerStats {
   totalTasks: number;
@@ -27,6 +27,7 @@ interface Task {
   reward: number;
   status: string;
   submissionCount: number;
+  currency?: string;
 }
 
 export default function EmployerDashboardPage() {
@@ -149,62 +150,79 @@ export default function EmployerDashboardPage() {
         </Link>
       </div>
 
+      {/* Wallet Overview */}
+      {session?.user?.id && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <WalletIcon size={24} className="text-gray-700" />
+            <h2 className="text-2xl font-semibold">Your Wallets</h2>
+          </div>
+          <WalletCard userId={session.user.id} />
+        </div>
+      )}
+
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.title}
-              className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.color}`}>
-                  <Icon size={24} />
+      <div>
+        <h2 className="text-2xl font-semibold mb-4">Overview</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.title}
+                className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.color}`}>
+                    <Icon size={24} />
+                  </div>
                 </div>
+                <p className="text-gray-600 text-sm mb-1">{stat.title}</p>
+                <p className="text-3xl font-semibold mb-2">{stat.value}</p>
+                <p className="text-sm text-gray-500">{stat.trend}</p>
               </div>
-              <p className="text-gray-600 text-sm mb-1">{stat.title}</p>
-              <p className="text-3xl font-semibold mb-2">{stat.value}</p>
-              <p className="text-sm text-gray-500">{stat.trend}</p>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Link
-          href="/dashboard/employer/tasks/new"
-          className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
-        >
-          <div className="w-12 h-12 bg-black text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Plus size={24} />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Create New Task</h3>
-          <p className="text-gray-600">Post a new micro-task for workers</p>
-        </Link>
+      <div>
+        <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Link
+            href="/dashboard/employer/tasks/new"
+            className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className="w-12 h-12 bg-black text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Plus size={24} />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Create New Task</h3>
+            <p className="text-gray-600">Post a new micro-task for workers</p>
+          </Link>
 
-        <Link
-          href="/dashboard/employer/submissions"
-          className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
-        >
-          <div className="w-12 h-12 bg-yellow-600 text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Clock size={24} />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Review Submissions</h3>
-          <p className="text-gray-600">Approve or reject worker submissions</p>
-        </Link>
+          <Link
+            href="/dashboard/employer/submissions"
+            className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className="w-12 h-12 bg-yellow-600 text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Clock size={24} />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Review Submissions</h3>
+            <p className="text-gray-600">Approve or reject worker submissions</p>
+          </Link>
 
-        <Link
-          href="/dashboard/employer/tasks"
-          className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
-        >
-          <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Briefcase size={24} />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Manage Tasks</h3>
-          <p className="text-gray-600">View and edit your posted tasks</p>
-        </Link>
+          <Link
+            href="/dashboard/employer/tasks"
+            className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Briefcase size={24} />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Manage Tasks</h3>
+            <p className="text-gray-600">View and edit your posted tasks</p>
+          </Link>
+        </div>
       </div>
 
       {/* Recent Tasks */}
@@ -248,11 +266,16 @@ export default function EmployerDashboardPage() {
                       }`}>
                         {task.status}
                       </span>
+                      {task.currency && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">
+                          {task.currency === "USD" ? "💵 USD" : "🔐 USDT"}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       <span className="flex items-center gap-1">
                         <DollarSign size={14} />
-                        ${task.reward} per completion
+                        {task.currency === "USDT_TRC20" ? "₮" : "$"}{task.reward} per completion
                       </span>
                       <span className="flex items-center gap-1">
                         <Users size={14} />

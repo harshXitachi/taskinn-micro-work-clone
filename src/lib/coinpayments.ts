@@ -6,8 +6,8 @@ const COINPAYMENTS_API_URL = 'https://www.coinpayments.net/api.php';
  * CoinPayments API request helper
  */
 async function coinpaymentsRequest(command: string, params: Record<string, any> = {}) {
-  const privateKey = process.env.COINPAYMENTS_PRIVATE_KEY || '';
-  const publicKey = process.env.COINPAYMENTS_PUBLIC_KEY || '';
+  const privateKey = process.env.COINPAYMENTS_API_SECRET || '';
+  const publicKey = process.env.COINPAYMENTS_API_KEY || '';
 
   if (!privateKey || !publicKey) {
     throw new Error('CoinPayments credentials are not configured');

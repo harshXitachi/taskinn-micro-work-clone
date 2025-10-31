@@ -9,7 +9,8 @@ import {
   Clock,
   FileText,
   Tag,
-  Users
+  Users,
+  Wallet
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ export default function CreateTaskPage() {
     timeEstimate: "",
     categoryId: "",
     slots: "1",
+    currency: "USD",
   });
 
   useEffect(() => {
@@ -94,6 +96,7 @@ export default function CreateTaskPage() {
           employerId: session?.user?.id,
           slots: slots,
           status: "open",
+          currency: formData.currency,
         }),
       });
 
@@ -186,6 +189,30 @@ export default function CreateTaskPage() {
           <h2 className="text-xl font-semibold">Task Details</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Currency Selector */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Payment Currency *
+              </label>
+              <div className="relative">
+                <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <select
+                  value={formData.currency}
+                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all appearance-none bg-white"
+                  required
+                >
+                  <option value="USD">💵 USD (PayPal)</option>
+                  <option value="USDT_TRC20">🔐 USDT (TRC-20)</option>
+                </select>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                {formData.currency === "USD" 
+                  ? "Workers will be paid via PayPal" 
+                  : "Workers will be paid via USDT TRC-20 wallet"}
+              </p>
+            </div>
+
             {/* Reward */}
             <div>
               <label className="block text-sm font-medium mb-2">
@@ -205,7 +232,7 @@ export default function CreateTaskPage() {
                 />
               </div>
               <p className="text-sm text-gray-500 mt-2">
-                How much will you pay per completed task?
+                Amount in {formData.currency === "USD" ? "USD" : "USDT"}
               </p>
             </div>
 
@@ -254,7 +281,7 @@ export default function CreateTaskPage() {
             </div>
 
             {/* Number of Workers Needed */}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-2">
                 Number of Workers Needed *
               </label>
@@ -275,6 +302,21 @@ export default function CreateTaskPage() {
               </p>
             </div>
           </div>
+
+          {/* Total Cost Preview */}
+          {formData.reward && formData.slots && (
+            <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Total Task Budget:</span>
+                <span className="text-2xl font-bold text-blue-600">
+                  {formData.currency === "USD" ? "$" : "₮"}{(parseFloat(formData.reward || "0") * parseInt(formData.slots || "1")).toFixed(2)} {formData.currency === "USD" ? "USD" : "USDT"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                {formData.reward} {formData.currency === "USD" ? "USD" : "USDT"} × {formData.slots} worker{parseInt(formData.slots) > 1 ? "s" : ""}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Submit Button */}
