@@ -8,7 +8,8 @@ import {
   DollarSign,
   Clock,
   FileText,
-  Tag
+  Tag,
+  Users
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ export default function CreateTaskPage() {
     reward: "",
     timeEstimate: "",
     categoryId: "",
+    slots: "1",
   });
 
   useEffect(() => {
@@ -41,8 +43,8 @@ export default function CreateTaskPage() {
         });
         const data = await res.json();
 
-        if (data.success) {
-          setCategories(data.data);
+        if (Array.isArray(data)) {
+          setCategories(data);
         }
       } catch (error) {
         console.error("Error fetching categories:", error);
@@ -66,6 +68,12 @@ export default function CreateTaskPage() {
       return;
     }
 
+    const slots = parseInt(formData.slots);
+    if (isNaN(slots) || slots <= 0) {
+      toast.error("Please enter a valid number of workers needed");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -79,21 +87,23 @@ export default function CreateTaskPage() {
         body: JSON.stringify({
           title: formData.title,
           description: formData.description,
-          instructions: formData.instructions || null,
-          reward,
-          timeEstimate: formData.timeEstimate || "30 minutes",
+          requirements: formData.instructions || null,
+          price: reward,
+          timeEstimate: formData.timeEstimate ? parseInt(formData.timeEstimate) : null,
           categoryId: parseInt(formData.categoryId) || categories[0]?.id || 1,
+          employerId: session?.user?.id,
+          slots: slots,
           status: "open",
         }),
       });
 
       const data = await res.json();
 
-      if (data.success) {
+      if (res.ok) {
         toast.success("Task created successfully!");
         router.push("/dashboard/employer/tasks");
       } else {
-        toast.error(data.message || "Failed to create task");
+        toast.error(data.error || "Failed to create task");
       }
     } catch (error) {
       console.error("Error creating task:", error);
@@ -202,15 +212,16 @@ export default function CreateTaskPage() {
             {/* Time Estimate */}
             <div>
               <label className="block text-sm font-medium mb-2">
-                Estimated Time
+                Estimated Time (minutes)
               </label>
               <div className="relative">
                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
-                  type="text"
+                  type="number"
+                  min="1"
                   value={formData.timeEstimate}
                   onChange={(e) => setFormData({ ...formData, timeEstimate: e.target.value })}
-                  placeholder="e.g., 30 minutes"
+                  placeholder="e.g., 30"
                   className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all"
                 />
               </div>
@@ -240,6 +251,28 @@ export default function CreateTaskPage() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Number of Workers Needed */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Number of Workers Needed *
+              </label>
+              <div className="relative">
+                <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.slots}
+                  onChange={(e) => setFormData({ ...formData, slots: e.target.value })}
+                  placeholder="1"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all"
+                  required
+                />
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                How many workers do you need for this task?
+              </p>
             </div>
           </div>
         </div>

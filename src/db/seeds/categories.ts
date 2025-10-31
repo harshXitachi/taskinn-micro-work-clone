@@ -2,65 +2,68 @@ import { db } from '@/db';
 import { categories } from '@/db/schema';
 
 async function main() {
+    // Delete all existing categories first to ensure a clean state
+    await db.delete(categories);
+
     const sampleCategories = [
         {
             name: 'Data Entry',
-            description: 'Enter data from images or documents into spreadsheets',
-            icon: 'database',
-            createdAt: new Date().toISOString(),
-        },
-        {
-            name: 'Surveys',
-            description: 'Complete surveys and questionnaires',
-            icon: 'clipboard-list',
-            createdAt: new Date().toISOString(),
-        },
-        {
-            name: 'Content Moderation',
-            description: 'Review and moderate user-generated content',
-            icon: 'shield-check',
+            description: 'Enter and organize data from various sources into structured formats',
+            icon: 'FileText',
             createdAt: new Date().toISOString(),
         },
         {
             name: 'Image Tagging',
-            description: 'Tag and categorize images with relevant keywords',
-            icon: 'tag',
+            description: 'Tag and label images with relevant keywords and categories',
+            icon: 'Image',
             createdAt: new Date().toISOString(),
         },
         {
-            name: 'Transcription',
-            description: 'Transcribe audio or video files to text',
-            icon: 'file-text',
+            name: 'Content Moderation',
+            description: 'Review and moderate user-generated content for policy compliance',
+            icon: 'Shield',
             createdAt: new Date().toISOString(),
         },
         {
-            name: 'Translation',
-            description: 'Translate text between different languages',
-            icon: 'languages',
+            name: 'Survey Completion',
+            description: 'Complete surveys and questionnaires on various topics',
+            icon: 'ClipboardList',
             createdAt: new Date().toISOString(),
         },
         {
-            name: 'Product Research',
-            description: 'Research products and compile data',
-            icon: 'search',
+            name: 'Audio Transcription',
+            description: 'Transcribe audio files into accurate written text',
+            icon: 'Mic',
+            createdAt: new Date().toISOString(),
+        },
+        {
+            name: 'Product Categorization',
+            description: 'Categorize and organize products into appropriate classifications',
+            icon: 'Package',
+            createdAt: new Date().toISOString(),
+        },
+        {
+            name: 'Web Research',
+            description: 'Research and gather information from online sources',
+            icon: 'Search',
             createdAt: new Date().toISOString(),
         },
         {
             name: 'Social Media Tasks',
-            description: 'Like, share, comment on social media posts',
-            icon: 'share-2',
+            description: 'Perform various tasks on social media platforms',
+            icon: 'Share2',
             createdAt: new Date().toISOString(),
         },
         {
-            name: 'Web Scraping',
-            description: 'Extract data from websites and online sources',
-            icon: 'globe',
+            name: 'Video Review',
+            description: 'Watch and review video content for quality and compliance',
+            icon: 'Video',
             createdAt: new Date().toISOString(),
         },
         {
-            name: 'App Testing',
-            description: 'Test mobile and web applications for bugs',
-            icon: 'smartphone',
+            name: 'Data Validation',
+            description: 'Verify and validate data accuracy and completeness',
+            icon: 'CheckCircle',
             createdAt: new Date().toISOString(),
         }
     ];

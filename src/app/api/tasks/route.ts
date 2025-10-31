@@ -196,9 +196,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate slots if provided
+    // Validate slots if provided - UPDATED VALIDATION
+    let slotsNum = 1; // Default to 1 if not provided
     if (slots !== undefined && slots !== null) {
-      const slotsNum = parseInt(slots);
+      slotsNum = parseInt(slots);
       if (isNaN(slotsNum) || slotsNum <= 0) {
         return NextResponse.json(
           { error: 'Slots must be a positive integer', code: 'INVALID_SLOTS' },
@@ -226,7 +227,7 @@ export async function POST(request: NextRequest) {
       employerId: employerId.trim(),
       price: priceNum,
       status: 'open',
-      slots: slots ? parseInt(slots) : 1,
+      slots: slotsNum, // Use validated slots value
       slotsFilled: 0,
       createdAt: new Date().toISOString(),
     };
