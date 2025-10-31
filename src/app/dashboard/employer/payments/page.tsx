@@ -103,7 +103,6 @@ export default function EmployerPaymentsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userId: session?.user?.id,
           currencyType: addFundsData.currencyType,
           amount,
         }),
@@ -111,8 +110,8 @@ export default function EmployerPaymentsPage() {
 
       const data = await res.json();
 
-      if (res.ok) {
-        toast.success(`Funds deposited successfully! You received $${data.netAmount.toFixed(2)} after commission.`);
+      if (res.ok && data.success) {
+        toast.success(`Funds deposited successfully! Amount: $${amount.toFixed(2)}`);
         setShowAddFunds(false);
         setAddFundsData({ currencyType: "USD", amount: "" });
         fetchWallets();
