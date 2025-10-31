@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { tasks } from '@/db/schema';
+import { tasks, wallets, walletTransactions } from '@/db/schema';
 import { eq, and, gte, lte, like, or, desc, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
       slots,
       requirements,
       expiresAt,
+      currency,
     } = body;
 
     // Validate required fields
@@ -178,6 +179,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate currency
+    if (!currency || !['USD', 'USDT'].includes(currency)) {
+      return NextResponse.json(
+        { success: false, error: 'Currency must be USD or USDT', code: 'INVALID_CURRENCY' },
+        { status: 400 }
+      );
+    }
+
     // Validate price
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum <= 0) {
@@ -196,8 +205,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate slots if provided - UPDATED VALIDATION
-    let slotsNum = 1; // Default to 1 if not provided
+    // Validate slots if provided
+    let slotsNum = 1;
     if (slots !== undefined && slots !== null) {
       slotsNum = parseInt(slots);
       if (isNaN(slotsNum) || slotsNum <= 0) {
@@ -219,6 +228,51 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Calculate total cost (price per slot * number of slots)
+    const totalCost = priceNum * slotsNum;
+
+    // Map currency to wallet currency_type
+    const currencyType = currency === 'USDT' ? 'USDT_TRC20' : 'USD';
+
+    // Get employer's wallet for the specified currency
+    const employerWallet = await db
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, employerId),
+          eq(wallets.currencyType, currencyType)
+        )
+      )
+      .limit(1);
+
+    if (employerWallet.length === 0) {
+      return NextResponse.json(
+        { success: false, error: `Employer ${currency} wallet not found`, code: 'WALLET_NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
+    const wallet = employerWallet[0];
+    const currentBalance = wallet.balance;
+    
+    if (currentBalance < totalCost) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `Insufficient ${currency} balance. Required: ${totalCost}, Available: ${currentBalance}`,
+          code: 'INSUFFICIENT_BALANCE' 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Deduct funds from employer's wallet
+    await db
+      .update(wallets)
+      .set({ balance: currentBalance - totalCost })
+      .where(eq(wallets.id, wallet.id));
+
     // Build insert data
     const insertData: any = {
       title: title.trim(),
@@ -226,8 +280,9 @@ export async function POST(request: NextRequest) {
       categoryId: categoryIdNum,
       employerId: employerId.trim(),
       price: priceNum,
+      currency: currency,
       status: 'open',
-      slots: slotsNum, // Use validated slots value
+      slots: slotsNum,
       slotsFilled: 0,
       createdAt: new Date().toISOString(),
     };
@@ -245,6 +300,18 @@ export async function POST(request: NextRequest) {
     }
 
     const newTask = await db.insert(tasks).values(insertData).returning();
+
+    // Create transaction record for the deduction
+    await db.insert(walletTransactions).values({
+      walletId: wallet.id,
+      transactionType: 'debit',
+      amount: totalCost,
+      currencyType: currencyType,
+      status: 'completed',
+      description: `Task creation: ${title.trim()}`,
+      referenceId: `task_${newTask[0].id}`,
+      createdAt: new Date().toISOString(),
+    });
 
     return NextResponse.json({ success: true, data: newTask[0] }, { status: 201 });
   } catch (error) {
