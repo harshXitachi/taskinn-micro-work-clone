@@ -71,6 +71,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch commission rate from adminSettings
+    const settingsResult = await db.select().from(adminSettings).limit(1);
+    
+    if (settingsResult.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'Admin settings not found',
+          code: 'ADMIN_SETTINGS_NOT_FOUND'
+        },
+        { status: 500 }
+      );
+    }
+
+    const commissionRate = settingsResult[0].commissionRate;
+
+    // Calculate commission and net amount
+    const commissionAmount = withdrawalAmount * commissionRate;
+    const netAmount = withdrawalAmount - commissionAmount;
+
     // Get user's wallet
     const userWallet = await db
       .select()
@@ -129,10 +148,45 @@ export async function POST(request: NextRequest) {
         currencyType: currencyType,
         status: 'completed',
         referenceId: `withdrawal_${Date.now()}`,
-        description: `Withdrawal to ${paymentMethod}: ${paymentAddress}${notes ? `. ${notes}` : ''}`,
+        description: `Withdrawal to ${paymentMethod}: ${paymentAddress}. Commission: ${commissionAmount.toFixed(2)} ${currencyType}. Net amount: ${netAmount.toFixed(2)} ${currencyType}${notes ? `. ${notes}` : ''}`,
         createdAt: timestamp,
       })
       .returning();
+
+    // Get or create admin wallet for this currency
+    let adminWallet = await db
+      .select()
+      .from(adminWallets)
+      .where(eq(adminWallets.currencyType, currencyType))
+      .limit(1);
+
+    if (adminWallet.length === 0) {
+      // Create admin wallet if doesn't exist
+      const newAdminWallet = await db
+        .insert(adminWallets)
+        .values({
+          currencyType: currencyType,
+          balance: commissionAmount,
+          totalEarned: commissionAmount,
+          totalWithdrawn: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .returning();
+      adminWallet = newAdminWallet;
+    } else {
+      // Update existing admin wallet with commission
+      const updatedAdminWallet = await db
+        .update(adminWallets)
+        .set({
+          balance: adminWallet[0].balance + commissionAmount,
+          totalEarned: adminWallet[0].totalEarned + commissionAmount,
+          updatedAt: timestamp,
+        })
+        .where(eq(adminWallets.id, adminWallet[0].id))
+        .returning();
+      adminWallet = updatedAdminWallet;
+    }
 
     return NextResponse.json(
       {
@@ -140,6 +194,9 @@ export async function POST(request: NextRequest) {
         withdrawal: {
           transactionId: withdrawalTransaction[0].id,
           amount: withdrawalAmount,
+          commission: Number(commissionAmount.toFixed(2)),
+          netAmount: Number(netAmount.toFixed(2)),
+          commissionRate: commissionRate,
           currencyType: currencyType,
           paymentMethod: paymentMethod,
           paymentAddress: paymentAddress,

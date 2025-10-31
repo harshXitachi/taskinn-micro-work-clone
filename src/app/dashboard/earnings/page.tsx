@@ -46,7 +46,7 @@ export default function EarningsPage() {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank");
   const [walletAddress, setWalletAddress] = useState("");
-  const [commissionRate] = useState(0); // No commission on withdrawals
+  const [commissionRate, setCommissionRate] = useState(0.05); // Default 5%, will fetch from admin settings
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,6 +55,13 @@ export default function EarningsPage() {
         const userId = session?.user?.id;
 
         if (!userId) return;
+
+        // Fetch commission rate from admin settings
+        const settingsRes = await fetch("/api/admin/settings");
+        const settingsData = await settingsRes.json();
+        if (Array.isArray(settingsData) && settingsData.length > 0) {
+          setCommissionRate(settingsData[0].commissionRate || 0.05);
+        }
 
         // Fetch earnings data
         const earningsRes = await fetch(`/api/workers/earnings?userId=${userId}&currencyType=USD`, {
@@ -124,9 +131,10 @@ export default function EarningsPage() {
       const data = await res.json();
 
       if (data.success) {
+        const { amount: withdrawalAmount, commission, netAmount } = data.withdrawal;
         toast.success(
-          `Withdrawal successful! $${amount.toFixed(2)} will be sent to your ${paymentMethod}.`,
-          { duration: 5000 }
+          `Withdrawal successful! Requested: $${withdrawalAmount.toFixed(2)} • Commission: $${commission.toFixed(2)} • You'll receive: $${netAmount.toFixed(2)}`,
+          { duration: 6000 }
         );
         setWithdrawAmount("");
         setWalletAddress("");
@@ -153,6 +161,8 @@ export default function EarningsPage() {
   }
 
   const withdrawalAmount = parseFloat(withdrawAmount) || 0;
+  const commission = withdrawalAmount * commissionRate;
+  const netAmount = withdrawalAmount - commission;
 
   return (
     <div className="space-y-8">
@@ -267,19 +277,26 @@ export default function EarningsPage() {
             />
           </div>
 
-          {/* Withdrawal Preview */}
+          {/* Withdrawal Preview with Commission */}
           {withdrawalAmount >= 5 && (
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5">
-              <div className="flex items-start gap-3 mb-3">
-                <AlertCircle className="text-blue-600 mt-0.5" size={20} />
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-5">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="text-amber-600 mt-0.5 flex-shrink-0" size={20} />
                 <div className="flex-1">
-                  <h3 className="font-semibold text-blue-900 mb-3">Withdrawal Summary</h3>
+                  <h3 className="font-semibold text-amber-900 mb-3">Withdrawal Summary</h3>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center py-2 border-b border-blue-200">
-                      <span className="text-blue-800">You will receive:</span>
-                      <span className="font-bold text-emerald-600 text-xl">${withdrawalAmount.toFixed(2)}</span>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-amber-800">Withdrawal Amount:</span>
+                      <span className="font-semibold text-gray-900">${withdrawalAmount.toFixed(2)}</span>
                     </div>
-                    <p className="text-blue-700 text-xs mt-2">✓ No commission fees • Full amount transferred</p>
+                    <div className="flex justify-between items-center py-2 border-t border-amber-200">
+                      <span className="text-amber-800">Commission ({(commissionRate * 100).toFixed(0)}%):</span>
+                      <span className="font-semibold text-red-600">-${commission.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 pt-3 border-t-2 border-amber-300">
+                      <span className="text-amber-900 font-semibold">You will receive:</span>
+                      <span className="font-bold text-emerald-600 text-xl">${netAmount.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
