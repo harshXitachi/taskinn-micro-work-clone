@@ -49,6 +49,9 @@ export default function AdminLoginPage() {
         commissionRate: data.commissionRate,
       }));
 
+      // Store admin ID as bearer token for API authentication
+      localStorage.setItem("bearer_token", data.id.toString());
+
       toast.success("Admin login successful!");
       router.push("/admin/dashboard");
     } catch (error) {

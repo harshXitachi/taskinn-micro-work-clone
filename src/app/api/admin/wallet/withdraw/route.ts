@@ -1,174 +1,160 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { adminWallets, walletTransactions } from '@/db/schema';
+import { adminWallets, adminSettings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+
+// Helper function to validate admin session
+async function validateAdminSession(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+
+    const sessionData = authHeader.replace('Bearer ', '');
+    
+    // Parse the session data (it's the admin ID stored in localStorage as bearer_token)
+    const adminId = parseInt(sessionData);
+    if (isNaN(adminId)) {
+      return null;
+    }
+
+    const admin = await db.select()
+      .from(adminSettings)
+      .where(eq(adminSettings.id, adminId))
+      .limit(1);
+
+    if (admin.length === 0) {
+      return null;
+    }
+
+    return admin[0];
+  } catch (error) {
+    console.error('Admin session validation error:', error);
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check
-    const user = await getCurrentUser(request);
-    if (!user) {
+    // Check for admin session
+    const admin = await validateAdminSession(request);
+    
+    if (!admin) {
       return NextResponse.json(
-        { error: 'Authentication required', code: 'AUTH_REQUIRED' },
+        { 
+          error: 'Admin authentication required',
+          code: 'AUTHENTICATION_REQUIRED'
+        },
         { status: 401 }
       );
     }
 
-    // Admin authorization check
-    if (user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Admin access required', code: 'FORBIDDEN' },
-        { status: 403 }
-      );
-    }
-
-    // Parse and validate request body
     const body = await request.json();
-    const { amount, currencyType, paymentMethod, paymentAddress, bankName, accountNumber, notes } = body;
+    const { 
+      amount, 
+      currencyType, 
+      paymentMethod, 
+      paymentAddress, 
+      bankName, 
+      accountNumber, 
+      notes 
+    } = body;
 
-    // Validate required fields
-    if (!amount) {
+    // Validation
+    if (!amount || amount <= 0) {
       return NextResponse.json(
-        { error: 'Amount is required', code: 'MISSING_AMOUNT' },
-        { status: 400 }
-      );
-    }
-
-    if (!currencyType) {
-      return NextResponse.json(
-        { error: 'Currency type is required', code: 'MISSING_CURRENCY_TYPE' },
-        { status: 400 }
-      );
-    }
-
-    if (!paymentMethod || paymentMethod.trim() === '') {
-      return NextResponse.json(
-        { error: 'Payment method is required', code: 'MISSING_PAYMENT_METHOD' },
-        { status: 400 }
-      );
-    }
-
-    if (!paymentAddress || paymentAddress.trim() === '') {
-      return NextResponse.json(
-        { error: 'Payment address is required', code: 'MISSING_PAYMENT_ADDRESS' },
-        { status: 400 }
-      );
-    }
-
-    // Validate currency type
-    if (currencyType !== 'USD' && currencyType !== 'USDT_TRC20') {
-      return NextResponse.json(
-        { error: 'Currency type must be USD or USDT_TRC20', code: 'INVALID_CURRENCY_TYPE' },
-        { status: 400 }
-      );
-    }
-
-    // Validate amount
-    if (typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Amount must be a positive number', code: 'INVALID_AMOUNT' },
+        { error: 'Invalid amount' },
         { status: 400 }
       );
     }
 
     if (amount < 5) {
       return NextResponse.json(
-        { error: 'Minimum withdrawal amount is $5', code: 'AMOUNT_TOO_LOW' },
+        { error: 'Minimum withdrawal amount is $5' },
         { status: 400 }
       );
     }
 
-    // Get admin wallet for specified currency
-    const adminWallet = await db
-      .select()
+    if (!currencyType || !['USD', 'USDT_TRC20'].includes(currencyType)) {
+      return NextResponse.json(
+        { error: 'Invalid currency type' },
+        { status: 400 }
+      );
+    }
+
+    if (!paymentMethod || !paymentAddress) {
+      return NextResponse.json(
+        { error: 'Payment method and address are required' },
+        { status: 400 }
+      );
+    }
+
+    // Get the admin wallet for the specified currency
+    const adminWalletsData = await db.select()
       .from(adminWallets)
       .where(eq(adminWallets.currencyType, currencyType))
       .limit(1);
 
-    if (adminWallet.length === 0) {
+    if (adminWalletsData.length === 0) {
       return NextResponse.json(
-        { 
-          error: `Admin wallet not found for ${currencyType}`, 
-          code: 'WALLET_NOT_FOUND' 
-        },
+        { error: 'Admin wallet not found' },
         { status: 404 }
       );
     }
 
-    const currentWallet = adminWallet[0];
-    const previousBalance = currentWallet.balance;
+    const adminWallet = adminWalletsData[0];
 
     // Check if sufficient balance
-    if (previousBalance < amount) {
+    if (adminWallet.balance < amount) {
       return NextResponse.json(
-        {
-          error: 'Insufficient balance for withdrawal',
-          code: 'INSUFFICIENT_BALANCE',
-          details: {
-            requested: amount,
-            available: previousBalance,
-            shortfall: amount - previousBalance
-          }
-        },
-        { status: 409 }
+        { error: 'Insufficient balance' },
+        { status: 400 }
       );
     }
 
-    // Calculate new balance
-    const newBalance = previousBalance - amount;
-    const timestamp = new Date().toISOString();
+    // Update wallet balance
+    const newBalance = adminWallet.balance - amount;
+    const newTotalWithdrawn = adminWallet.totalWithdrawn + amount;
 
-    // Update admin wallet with new balance
-    const updated = await db
-      .update(adminWallets)
+    await db.update(adminWallets)
       .set({
         balance: newBalance,
-        totalWithdrawn: currentWallet.totalWithdrawn + amount,
-        updatedAt: timestamp
+        totalWithdrawn: newTotalWithdrawn,
+        updatedAt: new Date().toISOString()
       })
-      .where(eq(adminWallets.id, currentWallet.id))
-      .returning();
+      .where(eq(adminWallets.id, adminWallet.id));
 
-    if (updated.length === 0) {
-      return NextResponse.json(
-        { error: 'Failed to update admin wallet', code: 'UPDATE_FAILED' },
-        { status: 500 }
-      );
-    }
+    // Log withdrawal details
+    console.log('Admin withdrawal processed:', {
+      adminId: admin.id,
+      amount,
+      currencyType,
+      paymentMethod,
+      paymentAddress,
+      bankName,
+      accountNumber,
+      notes,
+      timestamp: new Date().toISOString()
+    });
 
-    // Build withdrawal description
-    let description = `Admin withdrawal to ${paymentMethod}: ${paymentAddress}`;
-    if (bankName) description += ` (Bank: ${bankName})`;
-    if (accountNumber) description += ` (Account: ${accountNumber})`;
-    if (notes) description += `. Notes: ${notes}`;
+    return NextResponse.json({
+      success: true,
+      message: 'Withdrawal processed successfully',
+      withdrawal: {
+        amount,
+        currencyType,
+        newBalance,
+        totalWithdrawn: newTotalWithdrawn
+      }
+    }, { status: 200 });
 
-    // Return success response
-    return NextResponse.json(
-      {
-        success: true,
-        withdrawal: {
-          amount,
-          currencyType,
-          paymentMethod: paymentMethod.trim(),
-          paymentAddress: paymentAddress.trim(),
-          bankName: bankName ? bankName.trim() : undefined,
-          accountNumber: accountNumber ? accountNumber.trim() : undefined,
-          notes: notes ? notes.trim() : undefined,
-          previousBalance,
-          newBalance,
-          totalWithdrawn: updated[0].totalWithdrawn,
-          createdAt: timestamp
-        }
-      },
-      { status: 200 }
-    );
   } catch (error) {
     console.error('POST /api/admin/wallet/withdraw error:', error);
     return NextResponse.json(
       {
         error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),
-        code: 'INTERNAL_ERROR'
+        code: 'INTERNAL_SERVER_ERROR'
       },
       { status: 500 }
     );

@@ -1,31 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { adminWallets } from '@/db/schema';
+import { adminWallets, adminSettings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { getCurrentUser } from '@/lib/auth';
+
+// Helper function to validate admin session
+async function validateAdminSession(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+
+    const sessionData = authHeader.replace('Bearer ', '');
+    
+    // Parse the session data (it's the admin ID stored in localStorage as bearer_token)
+    // For admin, we'll validate by checking if the admin exists
+    const adminId = parseInt(sessionData);
+    if (isNaN(adminId)) {
+      return null;
+    }
+
+    const admin = await db.select()
+      .from(adminSettings)
+      .where(eq(adminSettings.id, adminId))
+      .limit(1);
+
+    if (admin.length === 0) {
+      return null;
+    }
+
+    return admin[0];
+  } catch (error) {
+    console.error('Admin session validation error:', error);
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // Authentication check
-    const user = await getCurrentUser(request);
-    if (!user) {
+    // Check for admin session
+    const admin = await validateAdminSession(request);
+    
+    if (!admin) {
       return NextResponse.json(
         { 
-          error: 'Authentication required',
+          error: 'Admin authentication required',
           code: 'AUTHENTICATION_REQUIRED'
         },
         { status: 401 }
-      );
-    }
-
-    // Authorization check - must be admin
-    if (user.role !== 'admin') {
-      return NextResponse.json(
-        {
-          error: 'Not authorized. Admin access required.',
-          code: 'FORBIDDEN'
-        },
-        { status: 403 }
       );
     }
 
@@ -44,7 +66,7 @@ export async function GET(request: NextRequest) {
           balance: usdWallet?.balance || 0,
           totalEarned: usdWallet?.totalEarned || 0,
           totalWithdrawn: usdWallet?.totalWithdrawn || 0,
-          pendingCommissions: 0, // Can be calculated from pending withdrawals if needed
+          pendingCommissions: 0,
           createdAt: usdWallet?.createdAt || null,
           updatedAt: usdWallet?.updatedAt || null,
         },
