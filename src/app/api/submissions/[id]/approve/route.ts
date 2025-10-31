@@ -100,7 +100,7 @@ export async function PUT(
     let paymentStatus = 'not_processed';
     let transactionDetails = null;
 
-    // Process payment - FULL AMOUNT, NO COMMISSION DEDUCTION
+    // Process payment - FULL AMOUNT to worker, NO COMMISSION
     try {
       const taskPrice = currentTask.price;
       const currencyType = 'USD';
@@ -117,8 +117,8 @@ export async function PUT(
         )
         .limit(1);
 
-      // Find worker wallet
-      const workerWallet = await db
+      // Find worker wallet or create if doesn't exist
+      let workerWallet = await db
         .select()
         .from(wallets)
         .where(
@@ -132,16 +132,28 @@ export async function PUT(
       if (employerWallet.length === 0) {
         paymentStatus = 'failed';
         transactionDetails = { error: 'Employer wallet not found' };
-      } else if (workerWallet.length === 0) {
-        paymentStatus = 'failed';
-        transactionDetails = { error: 'Worker wallet not found' };
       } else if (employerWallet[0].balance < taskPrice) {
         paymentStatus = 'failed';
         transactionDetails = { error: 'Insufficient employer wallet balance' };
       } else {
-        // Process payment - FULL AMOUNT WITHOUT COMMISSION
-        const referenceId = `task_${currentTask.id}_submission_${submissionId}`;
         const timestamp = new Date().toISOString();
+
+        // Create worker wallet if it doesn't exist
+        if (workerWallet.length === 0) {
+          const newWorkerWallet = await db
+            .insert(wallets)
+            .values({
+              userId: currentSubmission.workerId!,
+              currencyType: currencyType,
+              balance: 0,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            })
+            .returning();
+          workerWallet = newWorkerWallet;
+        }
+
+        const referenceId = `task_${currentTask.id}_submission_${submissionId}`;
 
         // Deduct FULL amount from employer wallet
         const updatedEmployerWallet = await db

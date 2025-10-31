@@ -213,3 +213,14 @@ export const walletTransactions = sqliteTable('wallet_transactions', {
   transactionHash: text('transaction_hash'),
   createdAt: text('created_at').notNull(),
 });
+
+// Add new admin_wallets table at the end
+export const adminWallets = sqliteTable('admin_wallets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  currencyType: text('currency_type').notNull(), // "USD" or "USDT_TRC20"
+  balance: real('balance').notNull().default(0),
+  totalEarned: real('total_earned').notNull().default(0),
+  totalWithdrawn: real('total_withdrawn').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

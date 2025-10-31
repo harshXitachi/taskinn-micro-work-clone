@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { wallets, walletTransactions, adminSettings } from '@/db/schema';
+import { wallets, walletTransactions, adminWallets, adminSettings } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       .where(eq(wallets.id, wallet.id))
       .returning();
 
-    // Create withdrawal transaction for user (debit)
+    // Create withdrawal transaction for user (debit full amount)
     const withdrawalTransaction = await db
       .insert(walletTransactions)
       .values({
@@ -149,14 +149,40 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    // Update admin total earnings
-    await db
-      .update(adminSettings)
-      .set({
-        totalEarnings: adminSettingsResult[0].totalEarnings + commissionAmount,
-        updatedAt: new Date(),
-      })
-      .where(eq(adminSettings.id, adminSettingsResult[0].id));
+    // Get or create admin wallet for this currency
+    let adminWallet = await db
+      .select()
+      .from(adminWallets)
+      .where(eq(adminWallets.currencyType, currencyType))
+      .limit(1);
+
+    if (adminWallet.length === 0) {
+      // Create admin wallet if doesn't exist
+      const newAdminWallet = await db
+        .insert(adminWallets)
+        .values({
+          currencyType: currencyType,
+          balance: commissionAmount,
+          totalEarned: commissionAmount,
+          totalWithdrawn: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .returning();
+      adminWallet = newAdminWallet;
+    } else {
+      // Update existing admin wallet
+      const updatedAdminWallet = await db
+        .update(adminWallets)
+        .set({
+          balance: adminWallet[0].balance + commissionAmount,
+          totalEarned: adminWallet[0].totalEarned + commissionAmount,
+          updatedAt: timestamp,
+        })
+        .where(eq(adminWallets.id, adminWallet[0].id))
+        .returning();
+      adminWallet = updatedAdminWallet;
+    }
 
     return NextResponse.json(
       {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { adminSettings } from '@/db/schema';
+import { adminWallets } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -28,36 +29,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get admin settings
-    const settings = await db.select().from(adminSettings).limit(1);
+    // Get admin wallets for both currencies
+    const adminWalletsData = await db.select().from(adminWallets);
 
-    if (settings.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'Admin settings not found',
-          code: 'ADMIN_SETTINGS_NOT_FOUND'
-        },
-        { status: 404 }
-      );
-    }
+    // Find USD and USDT wallets
+    const usdWallet = adminWalletsData.find(w => w.currencyType === 'USD');
+    const usdtWallet = adminWalletsData.find(w => w.currencyType === 'USDT_TRC20');
 
-    const adminData = settings[0];
-
-    // Return admin commission statistics
+    // Return admin wallet statistics
     return NextResponse.json({
       success: true,
       stats: {
-        totalEarnings: adminData.totalEarnings,
-        commissionRate: adminData.commissionRate,
-        adminUsername: adminData.adminUsername,
-        adminEmail: adminData.adminEmail,
-        createdAt: adminData.createdAt,
-        updatedAt: adminData.updatedAt
+        usd: {
+          balance: usdWallet?.balance || 0,
+          totalEarned: usdWallet?.totalEarned || 0,
+          totalWithdrawn: usdWallet?.totalWithdrawn || 0,
+          pendingCommissions: 0, // Can be calculated from pending withdrawals if needed
+          createdAt: usdWallet?.createdAt || null,
+          updatedAt: usdWallet?.updatedAt || null,
+        },
+        usdt: {
+          balance: usdtWallet?.balance || 0,
+          totalEarned: usdtWallet?.totalEarned || 0,
+          totalWithdrawn: usdtWallet?.totalWithdrawn || 0,
+          pendingCommissions: 0,
+          createdAt: usdtWallet?.createdAt || null,
+          updatedAt: usdtWallet?.updatedAt || null,
+        },
+        combined: {
+          totalCommissionsUSD: usdWallet?.totalEarned || 0,
+          totalCommissionsUSDT: usdtWallet?.totalEarned || 0,
+          currentBalanceUSD: usdWallet?.balance || 0,
+          currentBalanceUSDT: usdtWallet?.balance || 0,
+          totalWithdrawalsUSD: usdWallet?.totalWithdrawn || 0,
+          totalWithdrawalsUSDT: usdtWallet?.totalWithdrawn || 0,
+        }
       }
     }, { status: 200 });
 
   } catch (error) {
-    console.error('GET /api/admin/wallet-stats error:', error);
+    console.error('GET /api/admin/wallet/stats error:', error);
     return NextResponse.json(
       {
         error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error'),

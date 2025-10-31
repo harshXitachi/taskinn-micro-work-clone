@@ -2,28 +2,46 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Wallet, TrendingUp, DollarSign, Percent, Save, Download, AlertCircle, Check, X } from "lucide-react";
+import { ArrowLeft, Wallet, TrendingUp, DollarSign, Percent, Save, Download, AlertCircle, Check, X, Coins } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+interface WalletStats {
+  balance: number;
+  totalEarned: number;
+  totalWithdrawn: number;
+  pendingCommissions: number;
+}
+
 export default function AdminWalletPage() {
   const router = useRouter();
-  const [wallet, setWallet] = useState({
-    totalEarnings: 0,
-    commissionRate: 5,
-    adminSettingsId: 1,
+  const [usdWallet, setUsdWallet] = useState<WalletStats>({
+    balance: 0,
+    totalEarned: 0,
+    totalWithdrawn: 0,
+    pendingCommissions: 0,
   });
+  const [usdtWallet, setUsdtWallet] = useState<WalletStats>({
+    balance: 0,
+    totalEarned: 0,
+    totalWithdrawn: 0,
+    pendingCommissions: 0,
+  });
+  const [commissionRate, setCommissionRate] = useState(5);
   const [newCommissionRate, setNewCommissionRate] = useState(5);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
   // Withdrawal state
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawCurrency, setWithdrawCurrency] = useState<"USD" | "USDT_TRC20">("USD");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank");
   const [paymentAddress, setPaymentAddress] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [withdrawNotes, setWithdrawNotes] = useState("");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
@@ -39,17 +57,34 @@ export default function AdminWalletPage() {
 
   const loadWalletData = async () => {
     try {
-      // Fetch admin settings
+      const token = localStorage.getItem("bearer_token");
+      
+      // Fetch admin wallet stats (separate USD and USDT)
+      const walletRes = await fetch("/api/admin/wallet/stats", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!walletRes.ok) {
+        throw new Error("Failed to fetch wallet stats");
+      }
+      
+      const walletData = await walletRes.json();
+      
+      if (walletData.success && walletData.stats) {
+        setUsdWallet(walletData.stats.usd);
+        setUsdtWallet(walletData.stats.usdt);
+      }
+
+      // Fetch admin settings for commission rate
       const settingsRes = await fetch("/api/admin/settings");
       const settings = await settingsRes.json();
       const adminSettings = settings[0];
 
-      setWallet({
-        totalEarnings: adminSettings?.totalEarnings || 0,
-        commissionRate: (adminSettings?.commissionRate || 0.05) * 100,
-        adminSettingsId: adminSettings?.id || 1,
-      });
-      setNewCommissionRate((adminSettings?.commissionRate || 0.05) * 100);
+      if (adminSettings) {
+        const rate = (adminSettings.commissionRate || 0.05) * 100;
+        setCommissionRate(rate);
+        setNewCommissionRate(rate);
+      }
     } catch (error) {
       console.error("Failed to load wallet data:", error);
       toast.error("Failed to load wallet data");
@@ -67,7 +102,11 @@ export default function AdminWalletPage() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/admin/settings?id=${wallet.adminSettingsId}`, {
+      const settingsRes = await fetch("/api/admin/settings");
+      const settings = await settingsRes.json();
+      const adminSettings = settings[0];
+
+      const response = await fetch(`/api/admin/settings?id=${adminSettings.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -80,7 +119,7 @@ export default function AdminWalletPage() {
       if (!response.ok) throw new Error("Failed to update commission rate");
 
       toast.success("Commission rate updated successfully");
-      loadWalletData();
+      setCommissionRate(newCommissionRate);
     } catch (error) {
       toast.error("Failed to update commission rate");
     } finally {
@@ -88,8 +127,19 @@ export default function AdminWalletPage() {
     }
   };
 
+  const openWithdrawModal = (currency: "USD" | "USDT_TRC20") => {
+    setWithdrawCurrency(currency);
+    setWithdrawAmount("");
+    setPaymentAddress("");
+    setBankName("");
+    setAccountNumber("");
+    setWithdrawNotes("");
+    setShowWithdrawModal(true);
+  };
+
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
+    const currentWallet = withdrawCurrency === "USD" ? usdWallet : usdtWallet;
     
     if (isNaN(amount) || amount <= 0) {
       toast.error("Please enter a valid amount");
@@ -101,7 +151,7 @@ export default function AdminWalletPage() {
       return;
     }
 
-    if (amount > wallet.totalEarnings) {
+    if (amount > currentWallet.balance) {
       toast.error("Insufficient balance");
       return;
     }
@@ -123,8 +173,11 @@ export default function AdminWalletPage() {
         },
         body: JSON.stringify({
           amount,
+          currencyType: withdrawCurrency,
           paymentMethod,
           paymentAddress: paymentAddress.trim(),
+          bankName: bankName.trim() || undefined,
+          accountNumber: accountNumber.trim() || undefined,
           notes: withdrawNotes.trim() || undefined,
         }),
       });
@@ -135,11 +188,8 @@ export default function AdminWalletPage() {
         throw new Error(data.error || "Withdrawal failed");
       }
 
-      toast.success(`Successfully withdrew $${amount.toFixed(2)}`);
+      toast.success(`Successfully withdrew ${withdrawCurrency === "USD" ? "$" : ""}${amount.toFixed(2)}${withdrawCurrency === "USDT_TRC20" ? " USDT" : ""}`);
       setShowWithdrawModal(false);
-      setWithdrawAmount("");
-      setPaymentAddress("");
-      setWithdrawNotes("");
       loadWalletData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Withdrawal failed");
@@ -181,29 +231,78 @@ export default function AdminWalletPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        {/* Wallet Balance Card */}
-        <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-3xl p-8 mb-8 shadow-2xl">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 rounded-xl shadow-lg">
-                <Wallet className="h-8 w-8 text-white" />
+        {/* Wallet Balance Cards */}
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          {/* USD Wallet */}
+          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-3xl p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 rounded-xl shadow-lg">
+                  <DollarSign className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">USD Wallet</h2>
+                  <p className="text-sm text-emerald-300">Commission Balance</p>
+                </div>
               </div>
-              <h2 className="text-2xl font-semibold text-white">Commission Balance</h2>
+              <button
+                onClick={() => openWithdrawModal("USD")}
+                disabled={usdWallet.balance === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                <Download className="h-4 w-4" />
+                Withdraw
+              </button>
             </div>
-            <button
-              onClick={() => setShowWithdrawModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-            >
-              <Download className="h-5 w-5" />
-              Withdraw
-            </button>
+            <div className="text-5xl font-bold text-white mb-4">
+              ${usdWallet.balance.toFixed(2)}
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-slate-300">
+                <span>Total Earned:</span>
+                <span className="font-semibold text-emerald-300">${usdWallet.totalEarned.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>Total Withdrawn:</span>
+                <span className="font-semibold">${usdWallet.totalWithdrawn.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
-          <div className="text-6xl font-bold text-white mb-4">
-            ${wallet.totalEarnings.toFixed(2)}
-          </div>
-          <div className="flex items-center gap-2 text-emerald-300">
-            <TrendingUp className="h-5 w-5" />
-            <span>Total commission earned from platform</span>
+
+          {/* USDT Wallet */}
+          <div className="backdrop-blur-xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-3xl p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                  <Coins className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">USDT Wallet</h2>
+                  <p className="text-sm text-blue-300">TRC20 Commission</p>
+                </div>
+              </div>
+              <button
+                onClick={() => openWithdrawModal("USDT_TRC20")}
+                disabled={usdtWallet.balance === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                <Download className="h-4 w-4" />
+                Withdraw
+              </button>
+            </div>
+            <div className="text-5xl font-bold text-white mb-4">
+              {usdtWallet.balance.toFixed(2)} <span className="text-3xl text-blue-300">USDT</span>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-slate-300">
+                <span>Total Earned:</span>
+                <span className="font-semibold text-blue-300">{usdtWallet.totalEarned.toFixed(2)} USDT</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>Total Withdrawn:</span>
+                <span className="font-semibold">{usdtWallet.totalWithdrawn.toFixed(2)} USDT</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -218,7 +317,7 @@ export default function AdminWalletPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm text-slate-400 mb-2">Current Commission Rate</label>
-                <div className="text-5xl font-bold text-white">{wallet.commissionRate}%</div>
+                <div className="text-5xl font-bold text-white">{commissionRate}%</div>
                 <p className="text-sm text-slate-400 mt-3">
                   Deducted from user withdrawals only (not from task payments)
                 </p>
@@ -242,7 +341,7 @@ export default function AdminWalletPage() {
                   </div>
                   <Button
                     onClick={handleUpdateCommissionRate}
-                    disabled={isSaving || newCommissionRate === wallet.commissionRate}
+                    disabled={isSaving || newCommissionRate === commissionRate}
                     className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl px-6 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save className="h-4 w-4 mr-2" />
@@ -291,9 +390,9 @@ export default function AdminWalletPage() {
       {/* Withdrawal Modal */}
       {showWithdrawModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-          <div className="backdrop-blur-xl bg-slate-800 border border-white/20 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <div className="backdrop-blur-xl bg-slate-800 border border-white/20 rounded-2xl p-8 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">Withdraw Commission</h2>
+              <h2 className="text-2xl font-bold text-white">Withdraw {withdrawCurrency === "USD" ? "USD" : "USDT"}</h2>
               <button
                 onClick={() => setShowWithdrawModal(false)}
                 className="text-slate-400 hover:text-white transition-colors"
@@ -308,7 +407,10 @@ export default function AdminWalletPage() {
                   Available Balance
                 </label>
                 <div className="text-3xl font-bold text-emerald-400">
-                  ${wallet.totalEarnings.toFixed(2)}
+                  {withdrawCurrency === "USD" 
+                    ? `$${usdWallet.balance.toFixed(2)}`
+                    : `${usdtWallet.balance.toFixed(2)} USDT`
+                  }
                 </div>
               </div>
 
@@ -317,19 +419,24 @@ export default function AdminWalletPage() {
                   Withdrawal Amount
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                  {withdrawCurrency === "USD" && (
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                  )}
                   <input
                     type="number"
                     min="5"
-                    max={wallet.totalEarnings}
+                    max={withdrawCurrency === "USD" ? usdWallet.balance : usdtWallet.balance}
                     step="0.01"
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
+                    className={`w-full ${withdrawCurrency === "USD" ? "pl-8" : "pl-4"} pr-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none`}
                   />
+                  {withdrawCurrency === "USDT_TRC20" && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">USDT</span>
+                  )}
                 </div>
-                <p className="text-xs text-slate-400 mt-1">Minimum withdrawal: $5.00</p>
+                <p className="text-xs text-slate-400 mt-1">Minimum withdrawal: {withdrawCurrency === "USD" ? "$5.00" : "5.00 USDT"}</p>
               </div>
 
               <div>
@@ -341,21 +448,63 @@ export default function AdminWalletPage() {
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
                 >
-                  <option value="bank">Bank Transfer</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="crypto_wallet">Crypto Wallet</option>
+                  {withdrawCurrency === "USD" && (
+                    <>
+                      <option value="bank">Bank Transfer</option>
+                      <option value="paypal">PayPal</option>
+                    </>
+                  )}
+                  {withdrawCurrency === "USDT_TRC20" && (
+                    <option value="crypto_wallet">TRC20 Wallet</option>
+                  )}
                 </select>
               </div>
 
+              {paymentMethod === "bank" && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Bank Name
+                    </label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="e.g., Chase Bank"
+                      className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Account Number
+                    </label>
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      placeholder="Account number"
+                      className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
+                    />
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Account Details / Address
+                  {paymentMethod === "bank" ? "Additional Details" : paymentMethod === "paypal" ? "PayPal Email" : "Wallet Address"}
                 </label>
                 <input
                   type="text"
                   value={paymentAddress}
                   onChange={(e) => setPaymentAddress(e.target.value)}
-                  placeholder="Bank account, email, or wallet address"
+                  placeholder={
+                    paymentMethod === "bank" 
+                      ? "Routing number, SWIFT, etc." 
+                      : paymentMethod === "paypal"
+                      ? "your@email.com"
+                      : "TRC20 wallet address"
+                  }
                   className="w-full px-4 py-3 bg-slate-700/50 border border-white/10 rounded-xl text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
                 />
               </div>
