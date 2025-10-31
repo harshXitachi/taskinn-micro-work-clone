@@ -56,19 +56,21 @@ export default function TaskDetailPage() {
       try {
         const token = localStorage.getItem("bearer_token");
         
-        // Fetch task details
-        const taskRes = await fetch(`/api/tasks/${params.id}`, {
+        // Fetch task details - FIXED: Use query parameter instead of path parameter
+        const taskRes = await fetch(`/api/tasks?id=${params.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const taskData = await taskRes.json();
 
-        if (taskData.success) {
-          setTask(taskData.data);
-        } else {
+        if (taskData.success === false || !taskData) {
           toast.error("Task not found");
           router.push("/dashboard/tasks");
           return;
         }
+
+        // Handle both direct object response and wrapped response
+        const taskObject = taskData.data ? taskData.data : taskData;
+        setTask(taskObject);
 
         // Check if user has already applied/submitted
         const submissionsRes = await fetch(`/api/submissions?taskId=${params.id}&workerId=${session?.user?.id}`, {
