@@ -8,7 +8,8 @@ import {
   XCircle, 
   Eye,
   Filter,
-  Calendar
+  Calendar,
+  ArrowRight
 } from "lucide-react";
 import Link from "next/link";
 
@@ -187,19 +188,30 @@ export default function SubmissionsPage() {
                 </div>
               )}
 
-              {submission.attachmentUrl && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Eye size={16} />
-                  <a
-                    href={submission.attachmentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline"
-                  >
-                    View Attachment
-                  </a>
-                </div>
-              )}
+              <div className="flex items-center justify-between">
+                {submission.attachmentUrl && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Eye size={16} />
+                    <a
+                      href={submission.attachmentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                    >
+                      View Attachment
+                    </a>
+                  </div>
+                )}
+
+                {/* View Details Button */}
+                <Link
+                  href={`/dashboard/tasks/${submission.taskId}`}
+                  className="ml-auto inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-full font-medium hover:bg-blue-700 hover:shadow-lg transition-all hover:-translate-y-0.5"
+                >
+                  View Details
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
             </div>
           ))
         )}

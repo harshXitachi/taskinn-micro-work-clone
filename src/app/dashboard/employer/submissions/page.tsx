@@ -71,23 +71,25 @@ export default function EmployerSubmissionsPage() {
 
     try {
       const token = localStorage.getItem("bearer_token");
-      const res = await fetch(`/api/submissions/${submissionId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status,
-          feedback: feedback || null,
-        }),
-      });
+      
+      // Call the correct approve/reject endpoint
+      if (status === "approved") {
+        const res = await fetch(`/api/submissions/${submissionId}/approve`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            employerId: session?.user?.id,
+            reviewerNotes: feedback || "Approved",
+          }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (data.success) {
-        // If approved, create review
-        if (status === "approved") {
+        if (res.ok) {
+          // Create review after approval
           const submission = submissions.find(s => s.id === submissionId);
           if (submission) {
             await fetch("/api/reviews", {
@@ -104,19 +106,58 @@ export default function EmployerSubmissionsPage() {
               }),
             });
           }
-        }
 
-        toast.success(`Submission ${status} successfully!`);
-        setSubmissions(submissions.map(s => 
-          s.id === submissionId 
-            ? { ...s, status }
-            : s
-        ));
-        setReviewingId(null);
-        setFeedback("");
-        setRating(5);
+          toast.success("Submission approved and payment processed!");
+          
+          // Refresh submissions
+          const refreshRes = await fetch(`/api/submissions?employerId=${session?.user?.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const refreshData = await refreshRes.json();
+          if (refreshData.success) {
+            setSubmissions(refreshData.data);
+          }
+          
+          setReviewingId(null);
+          setFeedback("");
+          setRating(5);
+        } else {
+          toast.error(data.error || "Failed to approve submission");
+        }
       } else {
-        toast.error(data.message || "Failed to review submission");
+        // Reject submission
+        const res = await fetch(`/api/submissions/${submissionId}/reject`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            employerId: session?.user?.id,
+            reviewerNotes: feedback,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          toast.success("Submission rejected");
+          
+          // Refresh submissions
+          const refreshRes = await fetch(`/api/submissions?employerId=${session?.user?.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const refreshData = await refreshRes.json();
+          if (refreshData.success) {
+            setSubmissions(refreshData.data);
+          }
+          
+          setReviewingId(null);
+          setFeedback("");
+          setRating(5);
+        } else {
+          toast.error(data.error || "Failed to reject submission");
+        }
       }
     } catch (error) {
       console.error("Error reviewing submission:", error);
