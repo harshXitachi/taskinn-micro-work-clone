@@ -96,7 +96,7 @@ export default function EmployerPaymentsPage() {
 
     try {
       const token = localStorage.getItem("bearer_token");
-      const res = await fetch("/api/wallets/add-funds", {
+      const res = await fetch("/api/wallets/deposit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,13 +109,15 @@ export default function EmployerPaymentsPage() {
         }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        toast.success("Funds added successfully!");
+        toast.success(`Funds deposited successfully! You received $${data.netAmount.toFixed(2)} after commission.`);
         setShowAddFunds(false);
         setAddFundsData({ currencyType: "USD", amount: "" });
         fetchWallets();
       } else {
-        toast.error("Failed to add funds");
+        toast.error(data.error || "Failed to add funds");
       }
     } catch (error) {
       console.error("Error adding funds:", error);
