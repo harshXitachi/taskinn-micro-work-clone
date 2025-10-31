@@ -21,7 +21,7 @@ const PRESET_AVATARS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, refetch } = useSession();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -129,8 +129,15 @@ export default function OnboardingPage() {
 
       toast.success("Profile setup complete!");
       
-      // Redirect based on role
+      // Force refetch session to get updated user data
+      await refetch();
+      
+      // Redirect based on role with fresh session data
       const userRole = (session.user as any).role || "worker";
+      
+      // Log for debugging (remove in production)
+      console.log("Onboarding complete - User role:", userRole, "User:", session.user);
+      
       setTimeout(() => {
         if (userRole === "employer") {
           router.push("/dashboard/employer");

@@ -10,8 +10,17 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, refetch } = useSession();
   const router = useRouter();
+
+  // Force refetch session on mount to ensure fresh data
+  useEffect(() => {
+    const initializeSession = async () => {
+      await refetch();
+    };
+    
+    initializeSession();
+  }, [refetch]);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -35,6 +44,9 @@ export default function DashboardLayout({
   }
 
   const userRole = (session.user as any).role || "worker";
+  
+  // Log for debugging (remove in production)
+  console.log("Dashboard layout - User role:", userRole, "User:", session.user);
 
   return (
     <div className="min-h-screen bg-[#f5f3f0]">

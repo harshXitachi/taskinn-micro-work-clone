@@ -9,20 +9,37 @@ import Image from "next/image";
 export default function WelcomeBackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, refetch } = useSession();
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    // Force refetch session to ensure fresh data
+    const initializeSession = async () => {
+      await refetch();
+    };
+    
+    initializeSession();
+  }, [refetch]);
 
   useEffect(() => {
     if (!isPending && session?.user) {
       setIsRedirecting(true);
       const timer = setTimeout(() => {
-        const role = (session.user as any).role || "worker";
+        // Ensure we have the latest session data
+        const role = (session.user as any).role;
         
-        if (role === "employer") {
+        // Log for debugging (remove in production)
+        console.log("Welcome back - User role:", role, "User:", session.user);
+        
+        // Default to worker if role is undefined
+        const userRole = role || "worker";
+        
+        if (userRole === "employer") {
           router.push("/dashboard/employer");
-        } else if (role === "admin") {
+        } else if (userRole === "admin") {
           router.push("/admin/dashboard");
         } else {
+          // Default to worker dashboard
           router.push("/dashboard");
         }
       }, 2500);
