@@ -71,17 +71,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get admin settings for commission rate
-    const adminSettingsResult = await db.select().from(adminSettings).limit(1);
-    if (adminSettingsResult.length === 0) {
-      return NextResponse.json(
-        { error: 'Admin settings not found', code: 'ADMIN_SETTINGS_NOT_FOUND' },
-        { status: 500 }
-      );
-    }
-
-    const commissionRate = adminSettingsResult[0].commissionRate;
-
     // Get user's wallet
     const userWallet = await db
       .select()
@@ -118,10 +107,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate commission and net amount
-    const commissionAmount = withdrawalAmount * commissionRate;
-    const netAmount = withdrawalAmount - commissionAmount;
-
     const timestamp = new Date().toISOString();
 
     // Deduct withdrawal amount from user wallet
@@ -134,7 +119,7 @@ export async function POST(request: NextRequest) {
       .where(eq(wallets.id, wallet.id))
       .returning();
 
-    // Create withdrawal transaction for user (debit full amount)
+    // Create withdrawal transaction for user (negative amount to indicate debit)
     const withdrawalTransaction = await db
       .insert(walletTransactions)
       .values({
@@ -144,58 +129,21 @@ export async function POST(request: NextRequest) {
         currencyType: currencyType,
         status: 'completed',
         referenceId: `withdrawal_${Date.now()}`,
-        description: `Withdrawal to ${paymentMethod}: ${paymentAddress}. Net: ${netAmount.toFixed(2)}, Commission: ${commissionAmount.toFixed(2)}`,
+        description: `Withdrawal to ${paymentMethod}: ${paymentAddress}${notes ? `. ${notes}` : ''}`,
         createdAt: timestamp,
       })
       .returning();
-
-    // Get or create admin wallet for this currency
-    let adminWallet = await db
-      .select()
-      .from(adminWallets)
-      .where(eq(adminWallets.currencyType, currencyType))
-      .limit(1);
-
-    if (adminWallet.length === 0) {
-      // Create admin wallet if doesn't exist
-      const newAdminWallet = await db
-        .insert(adminWallets)
-        .values({
-          currencyType: currencyType,
-          balance: commissionAmount,
-          totalEarned: commissionAmount,
-          totalWithdrawn: 0,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })
-        .returning();
-      adminWallet = newAdminWallet;
-    } else {
-      // Update existing admin wallet
-      const updatedAdminWallet = await db
-        .update(adminWallets)
-        .set({
-          balance: adminWallet[0].balance + commissionAmount,
-          totalEarned: adminWallet[0].totalEarned + commissionAmount,
-          updatedAt: timestamp,
-        })
-        .where(eq(adminWallets.id, adminWallet[0].id))
-        .returning();
-      adminWallet = updatedAdminWallet;
-    }
 
     return NextResponse.json(
       {
         success: true,
         withdrawal: {
           transactionId: withdrawalTransaction[0].id,
-          withdrawalAmount: withdrawalAmount,
-          commissionAmount: commissionAmount,
-          commissionRate: commissionRate,
-          netAmount: netAmount,
+          amount: withdrawalAmount,
           currencyType: currencyType,
           paymentMethod: paymentMethod,
           paymentAddress: paymentAddress,
+          previousBalance: wallet.balance,
           newBalance: updatedWallet[0].balance,
           status: 'completed',
           createdAt: timestamp,
