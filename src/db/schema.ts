@@ -181,6 +181,7 @@ export const adminSettings = sqliteTable("admin_settings", {
   adminUsername: text("admin_username").notNull().default("admin"),
   adminPasswordHash: text("admin_password_hash").notNull(),
   adminEmail: text("admin_email"),
+  totalEarnings: real("total_earnings").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),

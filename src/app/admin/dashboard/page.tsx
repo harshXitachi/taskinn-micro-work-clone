@@ -65,10 +65,14 @@ export default function AdminDashboardPage() {
       const settings = await settingsRes.json();
       const adminSettings = settings[0];
 
-      // Fetch payments to calculate total earnings
-      const paymentsRes = await fetch("/api/payments");
-      const payments = await paymentsRes.json();
-      const totalEarnings = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      // Fetch wallet transactions to calculate total platform earnings
+      const transactionsRes = await fetch("/api/wallets/transactions?walletId=1&limit=1000");
+      const transactions = await transactionsRes.json();
+      
+      // Calculate total earnings from all task payments
+      const totalEarnings = transactions
+        .filter((t: any) => t.transactionType === "task_payment" && t.amount > 0)
+        .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
 
       setStats({
         totalUsers: users.length,
@@ -94,8 +98,8 @@ export default function AdminDashboardPage() {
 
   if (!adminSession || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
@@ -105,39 +109,63 @@ export default function AdminDashboardPage() {
       icon: BarChart3,
       label: "Analytics",
       href: "/admin/dashboard/analytics",
-      color: "text-blue-400",
+      color: "from-blue-500 to-blue-600",
     },
     {
       icon: UserCog,
       label: "User Management",
       href: "/admin/dashboard/users",
-      color: "text-purple-400",
+      color: "from-purple-500 to-purple-600",
     },
     {
       icon: Wallet,
       label: "Admin Wallet",
       href: "/admin/dashboard/wallet",
-      color: "text-green-400",
+      color: "from-emerald-500 to-emerald-600",
     },
     {
       icon: Settings,
       label: "Settings",
       href: "/admin/dashboard/settings",
-      color: "text-orange-400",
+      color: "from-orange-500 to-orange-600",
     },
   ];
 
   const statCards = [
-    { icon: Users, label: "Total Users", value: stats.totalUsers, color: "bg-blue-500" },
-    { icon: Briefcase, label: "Active Tasks", value: stats.activeTasks, color: "bg-purple-500" },
-    { icon: DollarSign, label: "Total Earnings", value: `$${stats.totalEarnings.toFixed(2)}`, color: "bg-green-500" },
-    { icon: Wallet, label: "Admin Wallet", value: `$${stats.adminWallet.toFixed(2)}`, color: "bg-orange-500" },
+    { 
+      icon: Users, 
+      label: "Total Users", 
+      value: stats.totalUsers, 
+      gradient: "from-blue-500 to-blue-600",
+      bgGradient: "from-blue-500/10 to-blue-600/5"
+    },
+    { 
+      icon: Briefcase, 
+      label: "Active Tasks", 
+      value: stats.activeTasks, 
+      gradient: "from-purple-500 to-purple-600",
+      bgGradient: "from-purple-500/10 to-purple-600/5"
+    },
+    { 
+      icon: DollarSign, 
+      label: "Total Earnings", 
+      value: `$${stats.totalEarnings.toFixed(2)}`, 
+      gradient: "from-emerald-500 to-emerald-600",
+      bgGradient: "from-emerald-500/10 to-emerald-600/5"
+    },
+    { 
+      icon: Wallet, 
+      label: "Admin Wallet", 
+      value: `$${stats.adminWallet.toFixed(2)}`, 
+      gradient: "from-orange-500 to-orange-600",
+      bgGradient: "from-orange-500/10 to-orange-600/5"
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+      <header className="backdrop-blur-xl bg-slate-900/80 border-b border-white/10 sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -148,19 +176,19 @@ export default function AdminDashboardPage() {
                 height={40}
                 className="h-8 w-auto brightness-0 invert"
               />
-              <div className="bg-red-500/20 border border-red-500/30 rounded-full px-3 py-1 flex items-center gap-2">
-                <Shield className="h-4 w-4 text-red-400" />
-                <span className="text-red-400 text-sm font-medium">Admin</span>
+              <div className="bg-gradient-to-r from-red-500 to-pink-500 rounded-full px-3 py-1.5 flex items-center gap-2 shadow-lg">
+                <Shield className="h-4 w-4 text-white" />
+                <span className="text-white text-sm font-semibold">Admin</span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              <span className="text-gray-300 text-sm">
-                Welcome, <span className="font-medium text-white">{adminSession.username}</span>
+              <span className="text-slate-300 text-sm">
+                Welcome, <span className="font-semibold text-white">{adminSession.username}</span>
               </span>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all border border-red-500/20"
               >
                 <LogOut className="h-4 w-4" />
                 Logout
@@ -174,8 +202,10 @@ export default function AdminDashboardPage() {
       <main className="container mx-auto px-6 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-medium text-white mb-2">Admin Dashboard</h1>
-          <p className="text-gray-400">Manage your TaskInn platform</p>
+          <h1 className="text-4xl font-bold text-white mb-2 bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+            Admin Dashboard
+          </h1>
+          <p className="text-slate-400 text-lg">Manage your TaskInn platform</p>
         </div>
 
         {/* Stats Grid */}
@@ -183,89 +213,97 @@ export default function AdminDashboardPage() {
           {statCards.map((stat, index) => (
             <div
               key={index}
-              className="bg-gray-800 border border-gray-700 rounded-2xl p-6 hover:border-gray-600 transition-colors"
+              className={`backdrop-blur-xl bg-gradient-to-br ${stat.bgGradient} border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all hover:-translate-y-1 shadow-xl`}
             >
               <div className="flex items-center justify-between mb-4">
-                <div className={`${stat.color} p-3 rounded-xl`}>
+                <div className={`bg-gradient-to-br ${stat.gradient} p-3 rounded-xl shadow-lg`}>
                   <stat.icon className="h-6 w-6 text-white" />
                 </div>
-                <TrendingUp className="h-5 w-5 text-green-400" />
+                <TrendingUp className="h-5 w-5 text-emerald-400" />
               </div>
-              <div className="text-2xl font-semibold text-white mb-1">{stat.value}</div>
-              <div className="text-sm text-gray-400">{stat.label}</div>
+              <div className="text-3xl font-bold text-white mb-1">{stat.value}</div>
+              <div className="text-sm text-slate-400">{stat.label}</div>
             </div>
           ))}
         </div>
 
         {/* Quick Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
+          <div className="backdrop-blur-xl bg-slate-800/50 border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all">
             <div className="flex items-center gap-3 mb-4">
-              <Users className="h-5 w-5 text-blue-400" />
-              <h3 className="text-lg font-medium text-white">User Breakdown</h3>
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-2 rounded-lg">
+                <Users className="h-5 w-5 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">User Breakdown</h3>
             </div>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Workers</span>
-                <span className="text-white font-medium">{stats.totalWorkers}</span>
+              <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                <span className="text-slate-300">Workers</span>
+                <span className="text-white font-semibold">{stats.totalWorkers}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Employers</span>
-                <span className="text-white font-medium">{stats.totalEmployers}</span>
+              <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                <span className="text-slate-300">Employers</span>
+                <span className="text-white font-semibold">{stats.totalEmployers}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
+          <div className="backdrop-blur-xl bg-slate-800/50 border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all">
             <div className="flex items-center gap-3 mb-4">
-              <Briefcase className="h-5 w-5 text-purple-400" />
-              <h3 className="text-lg font-medium text-white">Task Stats</h3>
+              <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-2 rounded-lg">
+                <Briefcase className="h-5 w-5 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Task Stats</h3>
             </div>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Total Tasks</span>
-                <span className="text-white font-medium">{stats.totalTasks}</span>
+              <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                <span className="text-slate-300">Total Tasks</span>
+                <span className="text-white font-semibold">{stats.totalTasks}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Active Tasks</span>
-                <span className="text-white font-medium">{stats.activeTasks}</span>
+              <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                <span className="text-slate-300">Active Tasks</span>
+                <span className="text-white font-semibold">{stats.activeTasks}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
+          <div className="backdrop-blur-xl bg-slate-800/50 border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all">
             <div className="flex items-center gap-3 mb-4">
-              <Activity className="h-5 w-5 text-green-400" />
-              <h3 className="text-lg font-medium text-white">Commission</h3>
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-2 rounded-lg">
+                <Activity className="h-5 w-5 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Commission</h3>
             </div>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Rate</span>
-                <span className="text-white font-medium">{stats.commissionRate}%</span>
+              <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                <span className="text-slate-300">Rate</span>
+                <span className="text-white font-semibold">{stats.commissionRate}%</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Collected</span>
-                <span className="text-white font-medium">${stats.adminWallet.toFixed(2)}</span>
+              <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
+                <span className="text-slate-300">Collected</span>
+                <span className="text-white font-semibold">${stats.adminWallet.toFixed(2)}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 mb-8">
-          <h3 className="text-lg font-medium text-white mb-6">Quick Actions</h3>
+        <div className="backdrop-blur-xl bg-slate-800/50 border border-white/10 rounded-2xl p-6 mb-8 hover:border-white/20 transition-all">
+          <h3 className="text-xl font-semibold text-white mb-6">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {menuItems.map((item, index) => (
               <Link
                 key={index}
                 href={item.href}
-                className="flex items-center justify-between p-4 bg-gray-700/50 hover:bg-gray-700 rounded-xl transition-colors group"
+                className="group flex items-center justify-between p-5 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/0 hover:border-white/20"
               >
                 <div className="flex items-center gap-3">
-                  <item.icon className={`h-5 w-5 ${item.color}`} />
-                  <span className="text-white font-medium">{item.label}</span>
+                  <div className={`bg-gradient-to-br ${item.color} p-2.5 rounded-lg shadow-lg group-hover:scale-110 transition-transform`}>
+                    <item.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-white font-semibold">{item.label}</span>
                 </div>
-                <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-white transition-colors" />
+                <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-white group-hover:translate-x-1 transition-all" />
               </Link>
             ))}
           </div>

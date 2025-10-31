@@ -100,7 +100,7 @@ export async function PUT(
     let paymentStatus = 'not_processed';
     let transactionDetails = null;
 
-    // Process payment
+    // Process payment - FULL AMOUNT, NO COMMISSION DEDUCTION
     try {
       const taskPrice = currentTask.price;
       const currencyType = 'USD';
@@ -139,11 +139,11 @@ export async function PUT(
         paymentStatus = 'failed';
         transactionDetails = { error: 'Insufficient employer wallet balance' };
       } else {
-        // Process payment
+        // Process payment - FULL AMOUNT WITHOUT COMMISSION
         const referenceId = `task_${currentTask.id}_submission_${submissionId}`;
         const timestamp = new Date().toISOString();
 
-        // Deduct from employer wallet
+        // Deduct FULL amount from employer wallet
         const updatedEmployerWallet = await db
           .update(wallets)
           .set({
@@ -153,7 +153,7 @@ export async function PUT(
           .where(eq(wallets.id, employerWallet[0].id))
           .returning();
 
-        // Add to worker wallet
+        // Add FULL amount to worker wallet
         const updatedWorkerWallet = await db
           .update(wallets)
           .set({
@@ -163,7 +163,7 @@ export async function PUT(
           .where(eq(wallets.id, workerWallet[0].id))
           .returning();
 
-        // Create employer transaction (debit)
+        // Create employer transaction (debit full amount)
         const employerTransaction = await db
           .insert(walletTransactions)
           .values({
@@ -178,7 +178,7 @@ export async function PUT(
           })
           .returning();
 
-        // Create worker transaction (credit)
+        // Create worker transaction (credit full amount)
         const workerTransaction = await db
           .insert(walletTransactions)
           .values({
