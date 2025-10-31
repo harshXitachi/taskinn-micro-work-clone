@@ -100,10 +100,10 @@ export async function PUT(
     let paymentStatus = 'not_processed';
     let transactionDetails = null;
 
-    // Process payment - FULL AMOUNT to worker, NO COMMISSION
+    // Process payment - Use task's currency field
     try {
       const taskPrice = currentTask.price;
-      const currencyType = 'USD';
+      const currencyType = currentTask.currency || 'USD'; // Use task currency
 
       // Find employer wallet
       const employerWallet = await db
@@ -131,10 +131,14 @@ export async function PUT(
 
       if (employerWallet.length === 0) {
         paymentStatus = 'failed';
-        transactionDetails = { error: 'Employer wallet not found' };
+        transactionDetails = { error: `Employer ${currencyType} wallet not found` };
       } else if (employerWallet[0].balance < taskPrice) {
         paymentStatus = 'failed';
-        transactionDetails = { error: 'Insufficient employer wallet balance' };
+        transactionDetails = { 
+          error: `Insufficient employer ${currencyType} wallet balance`,
+          required: taskPrice,
+          available: employerWallet[0].balance
+        };
       } else {
         const timestamp = new Date().toISOString();
 
@@ -185,7 +189,7 @@ export async function PUT(
             currencyType: currencyType,
             status: 'completed',
             referenceId: referenceId,
-            description: `Payment for task: ${currentTask.title}`,
+            description: `Payment for task: ${currentTask.title} (${currencyType})`,
             createdAt: timestamp,
           })
           .returning();
@@ -200,7 +204,7 @@ export async function PUT(
             currencyType: currencyType,
             status: 'completed',
             referenceId: referenceId,
-            description: `Payment received for task: ${currentTask.title}`,
+            description: `Payment received for task: ${currentTask.title} (${currencyType})`,
             createdAt: timestamp,
           })
           .returning();
@@ -211,6 +215,8 @@ export async function PUT(
           workerTransaction: workerTransaction[0],
           employerBalance: updatedEmployerWallet[0].balance,
           workerBalance: updatedWorkerWallet[0].balance,
+          currency: currencyType,
+          amount: taskPrice,
         };
       }
     } catch (paymentError) {

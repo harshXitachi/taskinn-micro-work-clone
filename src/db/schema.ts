@@ -98,6 +98,7 @@ export const tasks = sqliteTable("tasks", {
   employerId: text("employer_id").references(() => user.id),
   status: text("status").notNull().default("open"),
   price: real("price").notNull(),
+  currency: text("currency").notNull().default("USD"),
   timeEstimate: integer("time_estimate"),
   slots: integer("slots").notNull().default(1),
   slotsFilled: integer("slots_filled").notNull().default(0),

@@ -3,6 +3,8 @@ import { db } from '@/db';
 import { wallets, walletTransactions, adminWallets, adminSettings } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
+import { createPayPalPayout } from '@/lib/paypal';
+import { createUSDTWithdrawal } from '@/lib/coinpayments';
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
     // Validate minimum withdrawal
     if (withdrawalAmount < 5) {
       return NextResponse.json(
-        { error: 'Minimum withdrawal amount is $5', code: 'AMOUNT_TOO_LOW' },
+        { error: 'Minimum withdrawal amount is $5 or 5 USDT', code: 'AMOUNT_TOO_LOW' },
         { status: 400 }
       );
     }
@@ -127,6 +129,50 @@ export async function POST(request: NextRequest) {
     }
 
     const timestamp = new Date().toISOString();
+    let payoutResult: any = null;
+    let payoutStatus = 'pending';
+
+    // Process actual payout based on currency type
+    if (currencyType === 'USD') {
+      // Process PayPal payout
+      payoutResult = await createPayPalPayout(
+        paymentAddress,
+        netAmount,
+        'USD',
+        `TaskInn withdrawal - Net: $${netAmount.toFixed(2)} (Commission: $${commissionAmount.toFixed(2)})${notes ? ` - ${notes}` : ''}`
+      );
+
+      if (!payoutResult.success) {
+        return NextResponse.json(
+          {
+            error: `PayPal payout failed: ${payoutResult.error}`,
+            code: 'PAYOUT_FAILED',
+          },
+          { status: 500 }
+        );
+      }
+
+      payoutStatus = payoutResult.status === 'SUCCESS' ? 'completed' : 'pending';
+    } else if (currencyType === 'USDT_TRC20') {
+      // Process USDT withdrawal via CoinPayments
+      payoutResult = await createUSDTWithdrawal(
+        paymentAddress,
+        netAmount,
+        `TaskInn withdrawal - Net: ₮${netAmount.toFixed(2)} (Commission: ₮${commissionAmount.toFixed(2)})${notes ? ` - ${notes}` : ''}`
+      );
+
+      if (!payoutResult.success) {
+        return NextResponse.json(
+          {
+            error: `USDT withdrawal failed: ${payoutResult.error}`,
+            code: 'WITHDRAWAL_FAILED',
+          },
+          { status: 500 }
+        );
+      }
+
+      payoutStatus = 'pending'; // Crypto withdrawals usually start as pending
+    }
 
     // Deduct withdrawal amount from user wallet
     const updatedWallet = await db
@@ -138,7 +184,11 @@ export async function POST(request: NextRequest) {
       .where(eq(wallets.id, wallet.id))
       .returning();
 
-    // Create withdrawal transaction for user (negative amount to indicate debit)
+    // Create withdrawal transaction for user
+    const transactionReferenceId = currencyType === 'USD' 
+      ? payoutResult?.batchId 
+      : payoutResult?.withdrawalId;
+
     const withdrawalTransaction = await db
       .insert(walletTransactions)
       .values({
@@ -146,9 +196,10 @@ export async function POST(request: NextRequest) {
         transactionType: 'withdrawal',
         amount: -withdrawalAmount,
         currencyType: currencyType,
-        status: 'completed',
-        referenceId: `withdrawal_${Date.now()}`,
-        description: `Withdrawal to ${paymentMethod}: ${paymentAddress}. Commission: ${commissionAmount.toFixed(2)} ${currencyType}. Net amount: ${netAmount.toFixed(2)} ${currencyType}${notes ? `. ${notes}` : ''}`,
+        status: payoutStatus,
+        referenceId: transactionReferenceId || `withdrawal_${Date.now()}`,
+        description: `Withdrawal to ${paymentMethod}: ${paymentAddress}. Commission: ${commissionAmount.toFixed(2)} ${currencyType === 'USD' ? '$' : '₮'}. Net amount: ${netAmount.toFixed(2)} ${currencyType === 'USD' ? '$' : '₮'}${notes ? `. ${notes}` : ''}`,
+        transactionHash: transactionReferenceId,
         createdAt: timestamp,
       })
       .returning();
@@ -202,7 +253,8 @@ export async function POST(request: NextRequest) {
           paymentAddress: paymentAddress,
           previousBalance: wallet.balance,
           newBalance: updatedWallet[0].balance,
-          status: 'completed',
+          status: payoutStatus,
+          payoutReference: transactionReferenceId,
           createdAt: timestamp,
         },
       },
