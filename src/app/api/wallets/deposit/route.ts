@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { wallets, walletTransactions } from '@/db/schema';
+import { wallets, walletTransactions, adminWallets, adminSettings } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -74,6 +74,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get commission rate from admin settings
+    const settingsResult = await db.select().from(adminSettings).limit(1);
+    
+    if (settingsResult.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'Admin settings not found',
+          code: 'ADMIN_SETTINGS_NOT_FOUND'
+        },
+        { status: 500 }
+      );
+    }
+
+    const commissionRate = settingsResult[0].commissionRate;
+
+    // Calculate commission and net amount
+    const commissionAmount = amount * commissionRate;
+    const netAmount = amount - commissionAmount;
+
     // Get or create user wallet for the currency type
     let userWallet = await db
       .select()
@@ -106,8 +125,8 @@ export async function POST(request: NextRequest) {
 
     const wallet = userWallet[0];
 
-    // Calculate new balance (NO commission deduction)
-    const newBalance = wallet.balance + amount;
+    // Calculate new balance with netAmount (not full amount)
+    const newBalance = wallet.balance + netAmount;
 
     // Update wallet balance
     const updatedWallet = await db
@@ -129,18 +148,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create wallet transaction record
+    // Create wallet transaction record for user (netAmount)
     const referenceId = `deposit_${Date.now()}`;
     const description = notes
-      ? `Deposit to wallet - ${notes}`
-      : 'Deposit to wallet';
+      ? `Deposit to wallet - ${notes} (Commission: ${commissionAmount.toFixed(2)} ${currencyType})`
+      : `Deposit to wallet (Commission: ${commissionAmount.toFixed(2)} ${currencyType})`;
 
     const transaction = await db
       .insert(walletTransactions)
       .values({
         walletId: wallet.id,
         transactionType: 'deposit',
-        amount: amount,
+        amount: netAmount,
         currencyType: currencyType,
         status: 'completed',
         referenceId: referenceId,
@@ -160,14 +179,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return success response
+    // Get or create admin wallet for this currency
+    let adminWallet = await db
+      .select()
+      .from(adminWallets)
+      .where(eq(adminWallets.currencyType, currencyType))
+      .limit(1);
+
+    if (adminWallet.length === 0) {
+      // Create admin wallet if doesn't exist
+      const newAdminWallet = await db
+        .insert(adminWallets)
+        .values({
+          currencyType: currencyType,
+          balance: commissionAmount,
+          totalEarned: commissionAmount,
+          totalWithdrawn: 0,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      adminWallet = newAdminWallet;
+    } else {
+      // Update existing admin wallet
+      const updatedAdminWallet = await db
+        .update(adminWallets)
+        .set({
+          balance: adminWallet[0].balance + commissionAmount,
+          totalEarned: adminWallet[0].totalEarned + commissionAmount,
+          updatedAt: now,
+        })
+        .where(eq(adminWallets.id, adminWallet[0].id))
+        .returning();
+      adminWallet = updatedAdminWallet;
+    }
+
+    // Return success response with breakdown
     return NextResponse.json(
       {
         success: true,
         deposit: {
           transactionId: transaction[0].id,
-          amount: transaction[0].amount,
-          currencyType: transaction[0].currencyType,
+          depositedAmount: amount,
+          commissionRate: commissionRate,
+          commissionAmount: Number(commissionAmount.toFixed(2)),
+          netAmount: Number(netAmount.toFixed(2)),
+          currencyType: currencyType,
           newBalance: updatedWallet[0].balance,
           createdAt: transaction[0].createdAt,
           transactionHash: transaction[0].transactionHash || undefined

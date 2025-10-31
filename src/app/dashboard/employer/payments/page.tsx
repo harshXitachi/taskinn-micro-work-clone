@@ -10,6 +10,7 @@ import {
   ArrowDownRight,
   Clock,
   Check,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +45,23 @@ export default function EmployerPaymentsPage() {
     currencyType: "USD",
     amount: "",
   });
+  const [commissionRate, setCommissionRate] = useState(0.05); // Default 5%
+
+  // Fetch commission rate
+  const fetchCommissionRate = async () => {
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const res = await fetch("/api/admin/settings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setCommissionRate(data.settings.commissionRate);
+      }
+    } catch (error) {
+      console.error("Error fetching commission rate:", error);
+    }
+  };
 
   const fetchWallets = async () => {
     try {
@@ -81,6 +99,7 @@ export default function EmployerPaymentsPage() {
 
   useEffect(() => {
     if (session?.user) {
+      fetchCommissionRate();
       fetchWallets();
     }
   }, [session]);
@@ -111,7 +130,15 @@ export default function EmployerPaymentsPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        toast.success(`Funds deposited successfully! Amount: $${amount.toFixed(2)}`);
+        const { depositedAmount, commissionAmount, netAmount } = data.deposit;
+        toast.success(
+          <div>
+            <p className="font-semibold">Funds deposited successfully!</p>
+            <p className="text-sm mt-1">
+              Deposited: ${depositedAmount.toFixed(2)} • Commission: ${commissionAmount.toFixed(2)} • You received: ${netAmount.toFixed(2)}
+            </p>
+          </div>
+        );
         setShowAddFunds(false);
         setAddFundsData({ currencyType: "USD", amount: "" });
         fetchWallets();
@@ -131,6 +158,11 @@ export default function EmployerPaymentsPage() {
       </div>
     );
   }
+
+  // Calculate commission breakdown for preview
+  const depositAmount = parseFloat(addFundsData.amount) || 0;
+  const commissionAmount = depositAmount * commissionRate;
+  const netAmount = depositAmount - commissionAmount;
 
   return (
     <div className="space-y-8">
@@ -297,6 +329,31 @@ export default function EmployerPaymentsPage() {
                   required
                 />
               </div>
+
+              {/* Commission Breakdown Preview */}
+              {depositAmount > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-blue-800 font-medium mb-2">
+                    <Info size={18} />
+                    <span>Transaction Breakdown</span>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Deposit Amount:</span>
+                      <span className="font-semibold">${depositAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Commission ({(commissionRate * 100).toFixed(0)}%):</span>
+                      <span className="font-semibold text-red-600">-${commissionAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="border-t border-blue-200 pt-1 mt-1"></div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-700 font-medium">You'll Receive:</span>
+                      <span className="font-bold text-green-600">${netAmount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button
