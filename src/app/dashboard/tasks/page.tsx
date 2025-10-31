@@ -8,7 +8,6 @@ import {
   DollarSign, 
   Clock, 
   ChevronRight,
-  Star,
   TrendingUp,
   Users
 } from "lucide-react";
@@ -104,40 +103,40 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Stats */}
+      {/* Header with Stats - Redesigned */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm opacity-90 mb-1">Available Tasks</p>
-              <p className="text-4xl font-bold">{availableTasks.length}</p>
+              <p className="text-sm text-gray-600 mb-1">Available Tasks</p>
+              <p className="text-4xl font-bold text-black">{availableTasks.length}</p>
             </div>
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-              <TrendingUp size={28} />
+            <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center">
+              <TrendingUp size={28} className="text-gray-700" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm opacity-90 mb-1">Total Rewards</p>
-              <p className="text-4xl font-bold">${totalReward.toFixed(0)}</p>
+              <p className="text-sm text-gray-600 mb-1">Total Rewards</p>
+              <p className="text-4xl font-bold text-black">${totalReward.toFixed(0)}</p>
             </div>
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-              <DollarSign size={28} />
+            <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center">
+              <DollarSign size={28} className="text-gray-700" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm opacity-90 mb-1">Categories</p>
-              <p className="text-4xl font-bold">{categories.length}</p>
+              <p className="text-sm text-gray-600 mb-1">Categories</p>
+              <p className="text-4xl font-bold text-black">{categories.length}</p>
             </div>
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-              <Filter size={28} />
+            <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center">
+              <Filter size={28} className="text-gray-700" />
             </div>
           </div>
         </div>

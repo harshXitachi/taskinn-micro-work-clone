@@ -9,7 +9,8 @@ import {
   Calendar,
   ArrowLeft,
   AlertCircle,
-  Upload
+  Upload,
+  Users
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -18,15 +19,25 @@ interface Task {
   id: number;
   title: string;
   description: string;
-  instructions: string;
-  reward: number;
-  timeEstimate: string;
+  requirements: string;
+  price: number;
+  timeEstimate: number;
   categoryId: number;
   category: string;
   status: string;
   createdAt: string;
-  employerId: number;
-  employerName: string;
+  employerId: string;
+  slots: number;
+  slotsFilled: number;
+}
+
+interface Submission {
+  id: number;
+  taskId: number;
+  workerId: string;
+  status: string;
+  submissionData: string | null;
+  submittedAt: string;
 }
 
 export default function TaskDetailPage() {
@@ -34,38 +45,93 @@ export default function TaskDetailPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const [task, setTask] = useState<Task | null>(null);
+  const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [submissionText, setSubmissionText] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
 
   useEffect(() => {
-    const fetchTask = async () => {
+    const fetchTaskAndSubmission = async () => {
       try {
         const token = localStorage.getItem("bearer_token");
-        const res = await fetch(`/api/tasks/${params.id}`, {
+        
+        // Fetch task details
+        const taskRes = await fetch(`/api/tasks/${params.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = await res.json();
+        const taskData = await taskRes.json();
 
-        if (data.success) {
-          setTask(data.data);
+        if (taskData.success) {
+          setTask(taskData.data);
         } else {
           toast.error("Task not found");
           router.push("/dashboard/tasks");
+          return;
+        }
+
+        // Check if user has already applied/submitted
+        const submissionsRes = await fetch(`/api/submissions?taskId=${params.id}&workerId=${session?.user?.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const submissionsData = await submissionsRes.json();
+
+        if (submissionsData.success && submissionsData.data.length > 0) {
+          setSubmission(submissionsData.data[0]);
+          if (submissionsData.data[0].submissionData) {
+            try {
+              const data = JSON.parse(submissionsData.data[0].submissionData);
+              setSubmissionText(data.text || "");
+              setAttachmentUrl(data.attachmentUrl || "");
+            } catch {
+              setSubmissionText(submissionsData.data[0].submissionData);
+            }
+          }
         }
       } catch (error) {
-        console.error("Error fetching task:", error);
+        console.error("Error fetching data:", error);
         toast.error("Failed to load task");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTask();
-  }, [params.id, router]);
+    if (session?.user) {
+      fetchTaskAndSubmission();
+    }
+  }, [params.id, router, session]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleApply = async () => {
+    setActionLoading(true);
+
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const res = await fetch(`/api/tasks/${params.id}/apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success("Successfully applied to task!");
+        setSubmission(data);
+      } else {
+        toast.error(data.error || "Failed to apply");
+      }
+    } catch (error) {
+      console.error("Error applying:", error);
+      toast.error("An error occurred");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSubmitWork = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!submissionText.trim()) {
@@ -73,35 +139,81 @@ export default function TaskDetailPage() {
       return;
     }
 
-    setSubmitting(true);
+    setActionLoading(true);
 
     try {
       const token = localStorage.getItem("bearer_token");
       const res = await fetch(`/api/tasks/${params.id}/submit`, {
-        method: "POST",
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          submissionText,
-          attachmentUrl: attachmentUrl || null,
+          workerId: session?.user?.id,
+          submissionData: {
+            text: submissionText,
+            attachmentUrl: attachmentUrl || null,
+          },
         }),
       });
 
       const data = await res.json();
 
-      if (data.success) {
-        toast.success("Task submitted successfully!");
-        router.push("/dashboard/submissions");
+      if (res.ok) {
+        toast.success("Work submitted successfully! Awaiting employer review.");
+        setSubmission(data);
       } else {
-        toast.error(data.message || "Failed to submit task");
+        toast.error(data.error || "Failed to submit work");
       }
     } catch (error) {
-      console.error("Error submitting task:", error);
-      toast.error("Failed to submit task");
+      console.error("Error submitting:", error);
+      toast.error("An error occurred");
     } finally {
-      setSubmitting(false);
+      setActionLoading(false);
+    }
+  };
+
+  const handleResubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!submissionText.trim()) {
+      toast.error("Please provide your submission");
+      return;
+    }
+
+    setActionLoading(true);
+
+    try {
+      const token = localStorage.getItem("bearer_token");
+      const res = await fetch(`/api/submissions/${submission?.id}/resubmit`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          workerId: session?.user?.id,
+          submissionData: {
+            text: submissionText,
+            attachmentUrl: attachmentUrl || null,
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success("Work resubmitted successfully!");
+        setSubmission(data);
+      } else {
+        toast.error(data.error || "Failed to resubmit");
+      }
+    } catch (error) {
+      console.error("Error resubmitting:", error);
+      toast.error("An error occurred");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -117,6 +229,8 @@ export default function TaskDetailPage() {
     return null;
   }
 
+  const slotsAvailable = task.slots - task.slotsFilled;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Back Button */}
@@ -130,7 +244,7 @@ export default function TaskDetailPage() {
 
       {/* Task Header */}
       <div className="bg-white rounded-2xl p-8 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <span className="px-3 py-1 bg-gray-100 rounded-lg text-sm font-medium">
             {task.category}
           </span>
@@ -139,18 +253,27 @@ export default function TaskDetailPage() {
           }`}>
             {task.status}
           </span>
+          {slotsAvailable <= 3 && (
+            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium">
+              Only {slotsAvailable} spots left!
+            </span>
+          )}
         </div>
 
         <h1 className="text-3xl font-semibold mb-4">{task.title}</h1>
 
-        <div className="flex items-center gap-6 text-gray-600 mb-6">
+        <div className="flex items-center gap-6 text-gray-600 mb-6 flex-wrap">
           <div className="flex items-center gap-2">
             <DollarSign size={20} />
-            <span className="font-semibold text-green-600">${task.reward}</span>
+            <span className="font-semibold text-green-600">${task.price}</span>
           </div>
           <div className="flex items-center gap-2">
             <Clock size={20} />
-            <span>{task.timeEstimate}</span>
+            <span>{task.timeEstimate} min</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users size={20} />
+            <span>{slotsAvailable} spots available</span>
           </div>
           <div className="flex items-center gap-2">
             <Calendar size={20} />
@@ -158,10 +281,31 @@ export default function TaskDetailPage() {
           </div>
         </div>
 
-        <div className="border-t pt-6">
-          <h2 className="text-lg font-semibold mb-2">Posted by</h2>
-          <p className="text-gray-600">{task.employerName}</p>
-        </div>
+        {/* Submission Status */}
+        {submission && (
+          <div className={`mt-4 p-4 rounded-xl ${
+            submission.status === "applied" ? "bg-blue-50 border border-blue-200" :
+            submission.status === "pending" ? "bg-yellow-50 border border-yellow-200" :
+            submission.status === "approved" ? "bg-green-50 border border-green-200" :
+            "bg-red-50 border border-red-200"
+          }`}>
+            <p className="font-medium">
+              Status: <span className="capitalize">{submission.status}</span>
+            </p>
+            {submission.status === "applied" && (
+              <p className="text-sm mt-1">You've applied to this task. Now submit your work!</p>
+            )}
+            {submission.status === "pending" && (
+              <p className="text-sm mt-1">Your submission is awaiting employer review.</p>
+            )}
+            {submission.status === "approved" && (
+              <p className="text-sm mt-1">Congratulations! Your submission was approved.</p>
+            )}
+            {submission.status === "rejected" && (
+              <p className="text-sm mt-1">Your submission was rejected. You can resubmit below.</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Task Description */}
@@ -170,66 +314,86 @@ export default function TaskDetailPage() {
         <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{task.description}</p>
       </div>
 
-      {/* Task Instructions */}
-      {task.instructions && (
+      {/* Task Requirements */}
+      {task.requirements && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-8">
-          <div className="flex items-start gap-3 mb-4">
+          <div className="flex items-start gap-3">
             <AlertCircle className="text-blue-600 flex-shrink-0 mt-1" size={24} />
             <div>
-              <h2 className="text-xl font-semibold mb-2">Instructions</h2>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{task.instructions}</p>
+              <h2 className="text-xl font-semibold mb-2">Requirements</h2>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{task.requirements}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Submission Form */}
-      <div className="bg-white rounded-2xl p-8 shadow-sm">
-        <h2 className="text-2xl font-semibold mb-6">Submit Your Work</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Your Submission *
-            </label>
-            <textarea
-              value={submissionText}
-              onChange={(e) => setSubmissionText(e.target.value)}
-              placeholder="Describe your work or paste your completed task here..."
-              rows={8}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all resize-none"
-              required
-            />
-          </div>
+      {/* Actions */}
+      {!submission && (
+        <div className="bg-white rounded-2xl p-8 shadow-sm">
+          <h2 className="text-2xl font-semibold mb-4">Apply to This Task</h2>
+          <p className="text-gray-600 mb-6">
+            Click below to apply. Once applied, you can submit your work.
+          </p>
+          <button
+            onClick={handleApply}
+            disabled={actionLoading || slotsAvailable === 0}
+            className="w-full px-6 py-4 bg-black text-white rounded-full font-medium hover:shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {actionLoading ? "Applying..." : "Apply to Task"}
+          </button>
+        </div>
+      )}
 
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Attachment URL (Optional)
-            </label>
-            <div className="relative">
-              <Upload className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="url"
-                value={attachmentUrl}
-                onChange={(e) => setAttachmentUrl(e.target.value)}
-                placeholder="https://example.com/your-file.pdf"
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all"
+      {submission && (submission.status === "applied" || submission.status === "rejected") && (
+        <div className="bg-white rounded-2xl p-8 shadow-sm">
+          <h2 className="text-2xl font-semibold mb-6">
+            {submission.status === "rejected" ? "Resubmit Your Work" : "Submit Your Work"}
+          </h2>
+          
+          <form onSubmit={submission.status === "rejected" ? handleResubmit : handleSubmitWork} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Your Submission *
+              </label>
+              <textarea
+                value={submissionText}
+                onChange={(e) => setSubmissionText(e.target.value)}
+                placeholder="Describe your work or paste your completed task here..."
+                rows={8}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all resize-none"
+                required
               />
             </div>
-            <p className="text-sm text-gray-500 mt-2">
-              Provide a link to your work (Google Drive, Dropbox, etc.)
-            </p>
-          </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full px-6 py-4 bg-black text-white rounded-full font-medium hover:shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-          >
-            {submitting ? "Submitting..." : "Submit Task"}
-          </button>
-        </form>
-      </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Attachment URL (Optional)
+              </label>
+              <div className="relative">
+                <Upload className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="url"
+                  value={attachmentUrl}
+                  onChange={(e) => setAttachmentUrl(e.target.value)}
+                  placeholder="https://example.com/your-file.pdf"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all"
+                />
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                Provide a link to your work (Google Drive, Dropbox, etc.)
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={actionLoading}
+              className="w-full px-6 py-4 bg-black text-white rounded-full font-medium hover:shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {actionLoading ? "Submitting..." : submission.status === "rejected" ? "Resubmit Work" : "Submit Work"}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

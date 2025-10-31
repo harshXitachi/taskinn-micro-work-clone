@@ -188,3 +188,27 @@ export const adminSettings = sqliteTable("admin_settings", {
     .$defaultFn(() => new Date())
     .notNull(),
 });
+
+// Add new wallets table
+export const wallets = sqliteTable('wallets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().references(() => user.id),
+  currencyType: text('currency_type').notNull(), // "USD" or "USDT_TRC20"
+  balance: real('balance').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// Add new wallet_transactions table
+export const walletTransactions = sqliteTable('wallet_transactions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  walletId: integer('wallet_id').notNull().references(() => wallets.id),
+  transactionType: text('transaction_type').notNull(), // "deposit", "withdrawal", "task_payment", "task_refund"
+  amount: real('amount').notNull(),
+  currencyType: text('currency_type').notNull(),
+  status: text('status').notNull().default('pending'), // "pending", "completed", "failed"
+  referenceId: text('reference_id'),
+  description: text('description'),
+  transactionHash: text('transaction_hash'),
+  createdAt: text('created_at').notNull(),
+});

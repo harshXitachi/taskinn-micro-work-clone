@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { taskSubmissions, tasks } from '@/db/schema';
+import { taskSubmissions } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 
-export async function POST(
+export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -47,65 +47,7 @@ export async function POST(
       );
     }
 
-    // Validate submissionData is valid JSON string
-    try {
-      if (typeof submissionData === 'string') {
-        JSON.parse(submissionData);
-      } else {
-        // If it's an object, stringify it
-        JSON.stringify(submissionData);
-      }
-    } catch {
-      return NextResponse.json(
-        { 
-          error: "submissionData must be valid JSON",
-          code: "INVALID_JSON" 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if task exists and get its details
-    const taskResult = await db.select()
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1);
-
-    if (taskResult.length === 0) {
-      return NextResponse.json(
-        { 
-          error: "Task not found",
-          code: "TASK_NOT_FOUND" 
-        },
-        { status: 404 }
-      );
-    }
-
-    const task = taskResult[0];
-
-    // Validate task status
-    if (task.status !== 'open' && task.status !== 'in_progress') {
-      return NextResponse.json(
-        { 
-          error: "Task is not accepting submissions",
-          code: "TASK_NOT_ACCEPTING_SUBMISSIONS" 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if slots are full
-    if (task.slotsFilled >= task.slots) {
-      return NextResponse.json(
-        { 
-          error: "Task slots are full",
-          code: "SLOTS_FULL" 
-        },
-        { status: 409 }
-      );
-    }
-
-    // Check if worker has already submitted this task
+    // Find existing submission for this task and worker
     const existingSubmission = await db.select()
       .from(taskSubmissions)
       .where(
@@ -116,50 +58,58 @@ export async function POST(
       )
       .limit(1);
 
-    if (existingSubmission.length > 0) {
+    if (existingSubmission.length === 0) {
       return NextResponse.json(
         { 
-          error: "Worker has already submitted this task",
-          code: "DUPLICATE_SUBMISSION" 
+          error: "Submission not found. Worker must apply to the task first.",
+          code: "SUBMISSION_NOT_FOUND" 
+        },
+        { status: 404 }
+      );
+    }
+
+    const submission = existingSubmission[0];
+
+    // Validate submission status is "applied"
+    if (submission.status !== 'applied') {
+      return NextResponse.json(
+        { 
+          error: `Cannot submit work for submission with status: ${submission.status}. Status must be 'applied'.`,
+          code: "INVALID_STATUS" 
         },
         { status: 409 }
       );
     }
 
-    // Ensure submissionData is stored as a string
-    const submissionDataString = typeof submissionData === 'string' 
-      ? submissionData 
-      : JSON.stringify(submissionData);
+    // Prepare submission data (stringify if object)
+    const processedSubmissionData = typeof submissionData === 'object' 
+      ? JSON.stringify(submissionData) 
+      : submissionData;
 
-    // Create the submission
-    const newSubmission = await db.insert(taskSubmissions)
-      .values({
-        taskId,
-        workerId,
-        submissionData: submissionDataString,
+    // Update submission
+    const updatedSubmission = await db.update(taskSubmissions)
+      .set({
         status: 'pending',
+        submissionData: processedSubmissionData,
         submittedAt: new Date().toISOString(),
       })
+      .where(eq(taskSubmissions.id, submission.id))
       .returning();
 
-    // Calculate new slotsFilled value
-    const newSlotsFilled = task.slotsFilled + 1;
-    const newTaskStatus = newSlotsFilled >= task.slots 
-      ? 'completed' 
-      : (task.status === 'open' ? 'in_progress' : task.status);
+    if (updatedSubmission.length === 0) {
+      return NextResponse.json(
+        { 
+          error: "Failed to update submission",
+          code: "UPDATE_FAILED" 
+        },
+        { status: 500 }
+      );
+    }
 
-    // Update task status and slotsFilled
-    await db.update(tasks)
-      .set({
-        status: newTaskStatus,
-        slotsFilled: newSlotsFilled,
-      })
-      .where(eq(tasks.id, taskId));
-
-    return NextResponse.json(newSubmission[0], { status: 201 });
+    return NextResponse.json(updatedSubmission[0], { status: 200 });
 
   } catch (error) {
-    console.error('POST task submission error:', error);
+    console.error('PUT task submission error:', error);
     return NextResponse.json(
       { 
         error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error')
