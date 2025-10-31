@@ -99,7 +99,7 @@ export default function SignupPage() {
             />
           </Link>
 
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6 opacity-0 translate-y-5 animate-[fadeIn_0.8s_ease-out_forwards]">
             <div className="flex items-center gap-2">
               <Sparkles className="h-6 w-6 text-teal-400" />
               <h2 className="text-4xl xl:text-5xl font-medium text-white leading-tight">
@@ -122,7 +122,7 @@ export default function SignupPage() {
                 ].map((src, i) => (
                   <div
                     key={i}
-                    className="h-12 w-12 rounded-full border-2 border-black overflow-hidden animate-scale-in"
+                    className="h-12 w-12 rounded-full border-2 border-black overflow-hidden opacity-0 scale-80 animate-[scaleIn_0.5s_ease-out_forwards]"
                     style={{ animationDelay: `${i * 100}ms` }}
                   >
                     <Image
@@ -162,7 +162,7 @@ export default function SignupPage() {
             </Link>
 
             {/* Form Card */}
-            <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 sm:p-10 animate-slide-up">
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 sm:p-10 opacity-0 translate-y-10 animate-[slideUp_0.6s_ease-out_forwards]">
               <div className="mb-8">
                 <h1 className="text-3xl sm:text-4xl font-medium text-black mb-2">
                   Create Account
@@ -341,53 +341,6 @@ export default function SignupPage() {
           </div>
         </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(40px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fade-in 0.8s ease-out forwards;
-        }
-
-        .animate-slide-up {
-          animation: slide-up 0.6s ease-out forwards;
-        }
-
-        .animate-scale-in {
-          animation: scale-in 0.5s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 }

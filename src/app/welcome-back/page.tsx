@@ -57,7 +57,7 @@ export default function WelcomeBackPage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 text-center space-y-8 px-6 animate-fade-in-up max-w-2xl mx-auto">
+      <div className="relative z-10 text-center space-y-8 px-6 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_forwards] max-w-2xl mx-auto">
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <Image
@@ -79,7 +79,7 @@ export default function WelcomeBackPage() {
             <Sparkles className="h-8 w-8 text-purple-400 animate-pulse" />
           </div>
           
-          <p className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 via-purple-400 to-pink-400 animate-gradient">
+          <p className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 via-purple-400 to-pink-400 bg-[length:200%_200%] animate-[gradient_3s_ease_infinite]">
             {session.user.name}
           </p>
         </div>
@@ -122,37 +122,6 @@ export default function WelcomeBackPage() {
           <div className="h-2 w-2 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: "300ms" }} />
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes gradient {
-          0%, 100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-
-        .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out forwards;
-        }
-
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradient 3s ease infinite;
-        }
-      `}</style>
     </div>
   );
 }
