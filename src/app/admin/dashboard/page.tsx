@@ -57,31 +57,44 @@ export default function AdminDashboardPage() {
 
       // Fetch tasks stats
       const tasksRes = await fetch("/api/tasks");
-      const tasks = await tasksRes.json();
-      const activeTasks = tasks.filter((t: any) => t.status === "open").length;
+      const tasksPayload = await tasksRes.json();
+      const tasksList = Array.isArray(tasksPayload) ? tasksPayload : tasksPayload?.data ?? [];
+      const activeTasks = tasksList.filter((t: any) => t.status === "open").length;
 
       // Fetch admin settings
       const settingsRes = await fetch("/api/admin/settings");
       const settings = await settingsRes.json();
       const adminSettings = settings[0];
 
-      // Fetch wallet transactions to calculate total platform earnings
-      const transactionsRes = await fetch("/api/wallets/transactions?walletId=1&limit=1000");
-      const transactions = await transactionsRes.json();
-      
-      // Calculate total earnings from all task payments
-      const totalEarnings = transactions
-        .filter((t: any) => t.transactionType === "task_payment" && t.amount > 0)
-        .reduce((sum: number, t: any) => sum + Math.abs(t.amount), 0);
+      // Fetch admin wallet stats (real earnings and balances)
+      const adminToken = localStorage.getItem("admin_bearer_token");
+      let walletStatsUSD = { balance: 0, totalEarned: 0 } as any;
+      let walletStatsUSDT = { balance: 0, totalEarned: 0 } as any;
+      try {
+        const walletRes = await fetch("/api/admin/wallet/stats", {
+          headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : undefined,
+        });
+        if (walletRes.ok) {
+          const walletJson = await walletRes.json();
+          walletStatsUSD = walletJson?.stats?.usd ?? walletStatsUSD;
+          walletStatsUSDT = walletJson?.stats?.usdt ?? walletStatsUSDT;
+        }
+      } catch (e) {
+        // ignore wallet fetch failure and keep defaults
+      }
+
+      // Calculate platform totals from admin wallets
+      const totalEarnings = Number((walletStatsUSD.totalEarned + walletStatsUSDT.totalEarned).toFixed(2));
+      const adminWalletBalance = Number((walletStatsUSD.balance + walletStatsUSDT.balance).toFixed(2));
 
       setStats({
         totalUsers: users.length,
         totalWorkers: workers,
         totalEmployers: employers,
-        totalTasks: tasks.length,
+        totalTasks: tasksList.length,
         activeTasks,
         totalEarnings,
-        adminWallet: adminSettings?.totalEarnings || 0,
+        adminWallet: adminWalletBalance,
         commissionRate: (adminSettings?.commissionRate || 0) * 100,
       });
     } catch (error) {

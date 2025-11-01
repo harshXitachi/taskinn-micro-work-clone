@@ -31,17 +31,30 @@ export default function AdminAnalyticsPage() {
   const loadAnalytics = async () => {
     try {
       // Fetch all necessary data
+      const adminToken = localStorage.getItem("admin_bearer_token");
+      const paymentsFetch = adminToken
+        ? fetch("/api/payments?all=true", {
+            headers: { Authorization: `Bearer ${adminToken}` },
+          })
+        : fetch("/api/payments?all=true");
+
       const [usersRes, tasksRes, submissionsRes, paymentsRes, statsRes] = await Promise.all([
         fetch("/api/users"),
         fetch("/api/tasks"),
         fetch("/api/submissions"),
-        fetch("/api/payments"),
+        paymentsFetch,
         fetch("/api/users?stats=true"),
       ]);
 
+      // Parse payloads with correct shapes
       const users = await usersRes.json();
-      const tasks = await tasksRes.json();
-      const submissions = await submissionsRes.json();
+
+      const tasksPayload = await tasksRes.json();
+      const tasks = Array.isArray(tasksPayload) ? tasksPayload : tasksPayload?.data ?? [];
+
+      const submissionsPayload = await submissionsRes.json();
+      const submissions = Array.isArray(submissionsPayload) ? submissionsPayload : submissionsPayload?.data ?? [];
+
       const payments = await paymentsRes.json();
 
       // Calculate analytics
@@ -49,7 +62,7 @@ export default function AdminAnalyticsPage() {
       const pendingSubmissions = submissions.filter((s: any) => s.status === "pending").length;
       const rejectedSubmissions = submissions.filter((s: any) => s.status === "rejected").length;
 
-      const totalRevenue = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const totalRevenue = (Array.isArray(payments) ? payments : []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
       // Get top workers (by completed tasks)
       const workerStats = users

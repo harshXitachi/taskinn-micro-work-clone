@@ -1,18 +1,89 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { payments } from '@/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { payments, adminSettings } from '@/db/schema';
+import { eq, and, desc, sql, or } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const all = searchParams.get('all');
+
+    // Admin analytics mode: return ALL payments if authorized
+    if (all === 'true') {
+      const authHeader = request.headers.get('authorization');
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return NextResponse.json(
+          { error: 'Admin authentication required', code: 'ADMIN_AUTH_REQUIRED' },
+          { status: 401 }
+        );
+      }
+
+      const adminId = authHeader.replace('Bearer ', '').trim();
+      
+      // Validate admin ID against adminSettings table
+      const adminCheck = await db.select()
+        .from(adminSettings)
+        .where(eq(adminSettings.id, parseInt(adminId)))
+        .limit(1);
+
+      if (adminCheck.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid admin credentials', code: 'INVALID_ADMIN' },
+          { status: 403 }
+        );
+      }
+
+      // Admin authenticated - return ALL payments
+      const limit = Math.min(parseInt(searchParams.get('limit') ?? '100'), 200);
+      const offset = parseInt(searchParams.get('offset') ?? '0');
+      const paymentType = searchParams.get('paymentType');
+      const status = searchParams.get('status');
+
+      const conditions = [];
+
+      if (paymentType) {
+        const validTypes = ['earning', 'withdrawal', 'bonus', 'referral'];
+        if (!validTypes.includes(paymentType)) {
+          return NextResponse.json({ 
+            error: 'Invalid payment type. Must be one of: earning, withdrawal, bonus, referral',
+            code: 'INVALID_PAYMENT_TYPE'
+          }, { status: 400 });
+        }
+        conditions.push(eq(payments.paymentType, paymentType));
+      }
+
+      if (status) {
+        const validStatuses = ['pending', 'completed', 'failed'];
+        if (!validStatuses.includes(status)) {
+          return NextResponse.json({ 
+            error: 'Invalid status. Must be one of: pending, completed, failed',
+            code: 'INVALID_STATUS'
+          }, { status: 400 });
+        }
+        conditions.push(eq(payments.status, status));
+      }
+
+      let query = db.select().from(payments);
+
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+
+      query = query.orderBy(desc(payments.createdAt));
+
+      const results = await query.limit(limit).offset(offset);
+
+      return NextResponse.json(results, { status: 200 });
+    }
+
+    // Regular user mode: require authentication
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
 
     // Single payment by ID
     if (id) {
