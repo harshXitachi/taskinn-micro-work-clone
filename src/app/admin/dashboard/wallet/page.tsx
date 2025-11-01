@@ -33,6 +33,7 @@ export default function AdminWalletPage() {
   const [newCommissionRate, setNewCommissionRate] = useState(5);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   // Withdrawal state
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -57,7 +58,15 @@ export default function AdminWalletPage() {
 
   const loadWalletData = async () => {
     try {
-      const token = localStorage.getItem("bearer_token");
+      setLoadError(null);
+      const token = localStorage.getItem("admin_bearer_token");
+      
+      if (!token) {
+        setLoadError("Authentication token not found. Please log in again.");
+        toast.error("Authentication token not found");
+        setTimeout(() => router.push("/admin"), 2000);
+        return;
+      }
       
       // Fetch admin wallet stats (separate USD and USDT)
       const walletRes = await fetch("/api/admin/wallet/stats", {
@@ -65,7 +74,8 @@ export default function AdminWalletPage() {
       });
       
       if (!walletRes.ok) {
-        throw new Error("Failed to fetch wallet stats");
+        const errorData = await walletRes.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || `Failed to fetch wallet stats (${walletRes.status})`);
       }
       
       const walletData = await walletRes.json();
@@ -77,6 +87,11 @@ export default function AdminWalletPage() {
 
       // Fetch admin settings for commission rate
       const settingsRes = await fetch("/api/admin/settings");
+      
+      if (!settingsRes.ok) {
+        throw new Error("Failed to fetch admin settings");
+      }
+      
       const settings = await settingsRes.json();
       const adminSettings = settings[0];
 
@@ -87,7 +102,9 @@ export default function AdminWalletPage() {
       }
     } catch (error) {
       console.error("Failed to load wallet data:", error);
-      toast.error("Failed to load wallet data");
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      setLoadError(errorMessage);
+      toast.error(`Failed to load wallet data: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +181,7 @@ export default function AdminWalletPage() {
     setIsWithdrawing(true);
 
     try {
-      const token = localStorage.getItem("bearer_token");
+      const token = localStorage.getItem("admin_bearer_token");
       const response = await fetch("/api/admin/wallet/withdraw", {
         method: "POST",
         headers: {
@@ -201,7 +218,40 @@ export default function AdminWalletPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/60">Loading wallet data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+        <div className="backdrop-blur-xl bg-slate-800/50 border border-red-500/20 rounded-2xl p-8 max-w-md w-full text-center">
+          <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Failed to Load Wallet</h2>
+          <p className="text-slate-300 mb-6">{loadError}</p>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => {
+                setIsLoading(true);
+                setLoadError(null);
+                loadWalletData();
+              }}
+              className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl"
+            >
+              Retry
+            </Button>
+            <Button
+              onClick={() => router.push("/admin")}
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-white rounded-xl"
+            >
+              Back to Login
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
